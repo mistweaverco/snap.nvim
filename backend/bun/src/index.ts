@@ -24,9 +24,7 @@ const main = async () => {
     jsonPayload.data.type,
   );
   if (!clipboardCheck.success) {
-    console.error(
-      clipboardCheck.errorMessage,
-    );
+    console.error(clipboardCheck.errorMessage);
     return;
   }
 
@@ -35,13 +33,9 @@ const main = async () => {
     "utf-8",
   );
 
-  const html = template.replace(
-    "{{ CODE }}",
-    jsonPayload.data.code,
-  ).replace(
-    "{{ CODE_CONTAINER_CSS }}",
-    jsonPayload.data.codeContainerCSS,
-  );
+  const html = template
+    .replace("{{ CODE }}", jsonPayload.data.code)
+    .replace("{{ CODE_CONTAINER_CSS }}", jsonPayload.data.codeContainerCSS);
 
   let buffer: NodeHTMLToImageBuffer;
 

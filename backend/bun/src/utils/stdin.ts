@@ -41,7 +41,7 @@ export type JSONObjectSuccessRequest =
 export interface JSONObjectErrorRequest {
   success: false;
   data?: JSONObjectSuccessRequest["data"];
-  context?: { [key: string]: any };
+  context?: { [key: string]: unknown };
   error: string;
 }
 
@@ -65,7 +65,7 @@ export interface JSONObjectSuccessResponse {
 export interface JSONObjectErrorResponse {
   success: false;
   data?: JSONObjectSuccessResponse["data"];
-  context?: { [key: string]: any };
+  context?: { [key: string]: unknown };
   error: string;
 }
 
@@ -73,6 +73,10 @@ export type JSONObjectResponse =
   | JSONObjectSuccessResponse
   | JSONObjectErrorResponse;
 
+/**
+ * Writes a JSON object to stdout. If the object contains an error, exits the process with code 1.
+ * @param JSONObjectResponse - The JSON object to write to stdout.
+ */
 export const writeJSONToStdout = (obj: JSONObjectResponse): void => {
   try {
     process.stdout.write(JSON.stringify(obj));
