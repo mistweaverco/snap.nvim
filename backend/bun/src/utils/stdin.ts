@@ -1,3 +1,5 @@
+import type { JSONObjectRequest, JSONObjectResponse } from "./types.ts";
+
 export const readAllFromStdin = async () => {
   let data = "";
   for await (const chunk of process.stdin) {
@@ -5,73 +7,6 @@ export const readAllFromStdin = async () => {
   }
   return data;
 };
-
-export const enum JSONRequestType {
-  CodeImageGeneration = "image",
-  CodeHTMLGeneration = "html",
-}
-
-export interface JSONObjectImageSuccessRequest {
-  success: true;
-  data: {
-    type: JSONRequestType.CodeImageGeneration;
-    outputImageFormat: "png" | "jpeg";
-    outputImageWidth: number;
-    outputImageHeight: number;
-    filepath: string;
-  };
-}
-
-export interface JSONObjectHTMLSuccessRequest {
-  success: true;
-  data: {
-    type: JSONRequestType.CodeHTMLGeneration;
-    toClipboard: boolean;
-    transparent: boolean;
-    code: string;
-    codeContainerCSS: string;
-  };
-}
-
-// Image needs all fields from both interfaces, but HTML only needs its own fields
-export type JSONObjectSuccessRequest =
-  | (JSONObjectImageSuccessRequest & JSONObjectHTMLSuccessRequest)
-  | JSONObjectHTMLSuccessRequest;
-
-export interface JSONObjectErrorRequest {
-  success: false;
-  data?: JSONObjectSuccessRequest["data"];
-  context?: { [key: string]: unknown };
-  error: string;
-}
-
-export type JSONObjectRequest =
-  | JSONObjectSuccessRequest
-  | JSONObjectErrorRequest;
-
-export interface JSONObjectSuccessResponse {
-  success: true;
-  data: {
-    transparent: boolean;
-    code: string;
-    codeContainerCSS: string;
-    outputImageFormat: "png" | "jpeg";
-    outputImageWidth: number;
-    outputImageHeight: number;
-    filepath: string;
-  };
-}
-
-export interface JSONObjectErrorResponse {
-  success: false;
-  data?: JSONObjectSuccessResponse["data"];
-  context?: { [key: string]: unknown };
-  error: string;
-}
-
-export type JSONObjectResponse =
-  | JSONObjectSuccessResponse
-  | JSONObjectErrorResponse;
 
 /**
  * Writes a JSON object to stdout. If the object contains an error, exits the process with code 1.
@@ -86,7 +21,7 @@ export const writeJSONToStdout = (obj: JSONObjectResponse): void => {
   } catch (err) {
     const error = err as Error;
     process.stdout.write(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error.message, context: obj }),
     );
     process.exit(1);
   }

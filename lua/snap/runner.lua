@@ -1,44 +1,10 @@
 local M = {}
+local types = require("snap.types")
 local Logger = require("snap.logger")
 local Config = require("snap.config")
 local Backend = require("snap.backend")
 
 local BACKEND_BIN_PATH = Backend.get_bin_path()
-
----Calculate optimal size based on content
----@param content_lines table Array of content lines
----@param show_number boolean Whether line numbers are shown
----@return number width width in characters
----@return number height height in characters
-local function calculate_size(content_lines, show_number)
-  -- Calculate max line length
-  local max_line_len = 0
-  for _, line in ipairs(content_lines) do
-    -- Count display width (handles tabs as spaces)
-    local display_len = vim.fn.strdisplaywidth(line)
-    if display_len > max_line_len then
-      max_line_len = display_len
-    end
-  end
-
-  -- Calculate width needed
-  local line_count = #content_lines
-  local line_number_width = show_number and math.max(4, math.floor(math.log10(line_count)) + 1) or 0
-  local width = max_line_len + line_number_width + 4 -- +4 for margins/padding
-  -- Ensure minimum width
-  width = math.max(40, width)
-  -- Round up to reasonable size
-  width = math.min(120, math.ceil(width / 10) * 10)
-
-  -- Calculate height needed
-  local height = line_count + 4 -- +4 for status line and padding
-  -- Ensure minimum height
-  height = math.max(10, height)
-  -- Round up slightly
-  height = math.ceil(height / 2) * 2
-
-  return width, height
-end
 
 local function html_escape(s)
   s = s:gsub("&", "&amp;")
@@ -85,8 +51,11 @@ local function get_hl_by_name(name)
   -- e.g. "function.builtin" -> "@function.builtin"
   -- but some highlight groups are not prefixed, so we try both
   -- e.g. "Normal", "Comment", etc.
-  ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "@" .. name })
-  if ok and hl and not hl.link then
+  ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "@" .. name, link = false })
+  if ok and hl then
+    if hl.link then
+      return get_hl_by_name(hl.link)
+    end
     local t = {}
     if hl.fg then
       t.fg = convert_color_to_hex(hl.fg)
@@ -110,7 +79,10 @@ local function get_hl_by_name(name)
     return t, "@" .. name
   end
   ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name })
-  if ok and hl and not hl.link then
+  if ok and hl then
+    if hl.link then
+      return get_hl_by_name(hl.link)
+    end
     local t = {}
     if hl.fg then
       t.fg = convert_color_to_hex(hl.fg)
@@ -138,10 +110,11 @@ end
 
 ---Convert highlight definition table to CSS style string
 ---@param t table|nil Highlight definition table
----@return string CSS style string
+---@return SnapHighlightStyle|nil style CSS style object
 local function hl_table_to_style(t)
+  local cls_names = {}
   if not t then
-    return ""
+    return nil
   end
   local parts = {}
   if t.fg then
@@ -152,14 +125,21 @@ local function hl_table_to_style(t)
   end
   if t.bold then
     table.insert(parts, "font-weight:bold")
+    table.insert(cls_names, "snap-is-bold")
   end
   if t.italic then
     table.insert(parts, "font-style:italic")
+    table.insert(cls_names, "snap-is-italic")
   end
   if t.underline then
     table.insert(parts, "text-decoration:underline")
+    table.insert(cls_names, "snap-is-underline")
   end
-  return table.concat(parts, "; ")
+  return {
+    inline_css = table.concat(parts, "; "),
+    cls_name = #cls_names > 0 and table.concat(cls_names, " ") or nil,
+    hl_table = t,
+  }
 end
 
 --- Check if a highlight exists in the map for given range
@@ -181,8 +161,9 @@ end
 
 ---Build a table mapping line -> column -> highlight group using Tree-sitter
 ---@param bufnr number Buffer number
+---@param range SnapVisualRange Visual range (optional)
 ---@return table hl_map Highlight map
-local function build_hl_map(bufnr)
+local function build_hl_map(bufnr, range)
   local ft = vim.bo[bufnr].filetype
   local parser = vim.treesitter.get_parser(bufnr, ft)
   if not parser then
@@ -200,8 +181,9 @@ local function build_hl_map(bufnr)
 
   local hl_map = {}
 
-  -- higher priority captures later
-  for id, node, _ in query:iter_captures(tree:root(), bufnr, 0, -1) do
+  -- higher priority captures first,
+  -- so later captures do not override earlier ones
+  for id, node, _ in query:iter_captures(tree:root(), bufnr, range.start_line - 1, range.end_line) do
     -- e.g. "punctuation.bracket", "function.builtin", "operator", "string", etc.
     local hl_group = query.captures[id]
     local start_row, start_col, end_row, end_col = node:range()
@@ -211,9 +193,7 @@ local function build_hl_map(bufnr)
       local c_start = (r == start_row) and start_col or 0
       local c_end = (r == end_row) and end_col or math.huge
       local existing_idx = exists_in_hl_map(hl_map, r, c_start, c_end)
-      if existing_idx then
-        hl_map[r][existing_idx] = { start_col = c_start, end_col = c_end, hl_group = hl_group }
-      else
+      if existing_idx == nil then
         table.insert(hl_map[r], { start_col = c_start, end_col = c_end, hl_group = hl_group })
       end
     end
@@ -259,38 +239,44 @@ local get_absolute_plugin_path = function(...)
 end
 
 ---Export buffer to HTML file with syntax highlighting
----@param opts table|nil Options
----@param export_type string|nil Export type ("html" or "image")
-local function export_buf_to_html(opts, export_type)
+---@param opts SnapExportOptions|nil Export options
+---@return SnapPayload JSON payload for backend
+local function export_buf_to_html(opts)
   opts = opts or {}
-  local bufnr = opts.bufnr or vim.api.nvim_get_current_buf()
+  opts.range = opts.range or {
+    start_line = 1,
+    end_line = -1,
+  }
+
+  local user_config = Config.get()
+  local bufnr = vim.api.nvim_get_current_buf()
   local filepath = opts.filepath or default_output_path(bufnr)
 
-  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local hl_map = build_hl_map(bufnr)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, opts.range.start_line - 1, opts.range.end_line, false)
+  local hl_map = build_hl_map(bufnr, opts.range)
   local hl_style_cache = {}
 
-  local out_data = {
+  --- @type SnapPayload
+  local snap_payload = {
     success = true,
+    debug = user_config.debug and true or false,
     data = {
-      type = export_type or "html",
-      code = "",
+      additional_template_data = user_config.additional_template_data or {},
+      code = {},
+      theme = {
+        bgColor = DEFAULT_BG,
+        fgColor = DEFAULT_FG,
+      },
       filepath = filepath,
-      outputImageFormat = "png",
-      outputImageHeight = -1,
-      outputImageWidth = -1,
+      fontSettings = user_config.font_settings or Config.defaults.font_settings,
+      outputImageFormat = types.SnapImageOutputFormat.png,
+      templateFilepath = user_config.templateFilepath or nil,
       transparent = true,
+      type = opts.type or types.SnapPayloadType.html,
     },
   }
-  out_data.data.codeContainerCSS = "background-color:"
-    .. DEFAULT_BG
-    .. ";color:"
-    .. DEFAULT_FG
-    .. ";font-color:"
-    .. DEFAULT_FG
-    .. ";"
 
-  for row, line in ipairs(lines) do
+  for row, line in pairs(lines) do
     local out_line = {}
     local col = 0
     local current_hl = nil
@@ -301,6 +287,7 @@ local function export_buf_to_html(opts, export_type)
       local hl_group = get_hl_at(hl_map, row - 1, col)
       if hl_group ~= current_hl then
         if current_segment ~= "" then
+          ---@type SnapHighlightStyle|nil
           local style = nil
           if current_hl then
             style = hl_style_cache[current_hl]
@@ -315,9 +302,10 @@ local function export_buf_to_html(opts, export_type)
             table.insert(
               out_line,
               string.format(
-                '<span data-hlgroup="%s" style="%s">%s</span>',
-                current_resolved_hl or "undefined",
-                style,
+                '<span data-hlgroup="%s" style="%s" class="%s">%s</span>',
+                current_resolved_hl or "default",
+                style.inline_css,
+                style.cls_name,
                 html_escape(current_segment)
               )
             )
@@ -333,6 +321,7 @@ local function export_buf_to_html(opts, export_type)
       col = col + 1
     end
     if current_segment ~= "" then
+      ---@type SnapHighlightStyle|nil
       local style = nil
       if current_hl then
         style = hl_style_cache[current_hl]
@@ -347,9 +336,10 @@ local function export_buf_to_html(opts, export_type)
         table.insert(
           out_line,
           string.format(
-            '<span data-hlgroup="%s" style="%s">%s</span>',
-            current_resolved_hl or "undefined",
-            style,
+            '<span data-hlgroup="%s" style="%s" class="%s">%s</span>',
+            current_resolved_hl or "default",
+            style.inline_css,
+            style.cls_name,
             html_escape(current_segment)
           )
         )
@@ -357,101 +347,21 @@ local function export_buf_to_html(opts, export_type)
         table.insert(out_line, html_escape(current_segment))
       end
     end
-    out_data.data.code = table.concat(out_line)
+    table.insert(snap_payload.data.code, table.concat(out_line, ""))
   end
-  return vim.fn.json_encode(out_data)
+  return snap_payload
 end
 
 ---Export current buffer to HTML
-M.html_to_clipboard = function()
+---@param opts SnapExportOptions|nil Export options
+M.html_to_clipboard = function(opts)
+  opts = opts or {}
   Backend.ensure_installed(Config.get().debug)
-  local jsonPayload = export_buf_to_html(nil, "html")
+  local jsonPayload = vim.fn.json_encode(export_buf_to_html({
+    range = opts.range,
+    type = types.SnapPayloadType.html,
+  }))
   local conf = Config.get()
-  local backend_dir
-  local system_args = nil
-
-  if conf.backend ~= "bun" and conf.backend ~= "node" then
-    error("Unsupported backend: " .. tostring(conf.backend))
-  else
-    backend_dir = "nodejs"
-  end
-
-  local cwd = get_absolute_plugin_path("backend", backend_dir)
-  if not vim.fn.isdirectory(cwd) then
-    error("Backend directory not found: " .. cwd)
-  end
-
-  -- Try to find backend bin in PATH
-  local backend_bin_path = vim.fn.exepath(conf.backend)
-  if backend_bin_path == "" then
-    error(conf.backend .. " executable not found in PATH")
-  else
-    system_args = { backend_bin_path, "run", "." }
-  end
-
-  local system_obj = vim.system(
-    system_args,
-    {
-      timeout = conf.timeout,
-      stdin = true,
-      cwd = cwd,
-      env = vim.fn.environ(),
-      text = true,
-    },
-    vim.schedule_wrap(function(result)
-      if result.stdout and result.stdout ~= "" then
-        local ok, res = pcall(vim.fn.json_decode, result.stdout)
-        if not ok then
-          Logger.warn("Failed to decode JSON output: " .. tostring(res))
-          return
-        end
-        if res.success then
-          Logger.info("Exported HTML to: " .. tostring(res.data.filepath))
-        else
-          print("Export HTML failed: " .. vim.inspect(res))
-        end
-      end
-      if result.stderr and result.stderr ~= "" then
-        print("Error exporting HTML: " .. vim.inspect(result.stderr))
-      end
-      if result.code ~= 0 then
-        print("Process exited with non-zero code: " .. tostring(result.code))
-      end
-    end)
-  )
-
-  -- Write JSON payload to stdin
-  system_obj:write(jsonPayload)
-  -- Close stdin to signal end of input
-  system_obj:write(nil)
-end
-
----Get default save path for screenshots
----@return string|nil Default save path or nil
-M.get_default_save_path = function()
-  local home = vim.fn.expand("~")
-  local screenshots_dir = home .. "/Pictures/Screenshots"
-  if vim.fn.isdirectory(screenshots_dir) == 1 then
-    return screenshots_dir
-  end
-  local conf = Config.get()
-  local filepath = conf.output_dir and vim.fn.fnamemodify(conf.output_dir, ":p") or nil
-  if filepath and vim.fn.isdirectory(filepath) == 1 then
-    return filepath
-  end
-  return nil
-end
-
----Export current buffer to HTML using backend
-M.image_to_clipboard = function()
-  Backend.ensure_installed(Config.get().debug)
-  local conf = Config.get()
-  local save_path = M.get_default_save_path()
-  local filename = conf.filename_pattern and conf.filename_pattern:gsub("%%t", os.date("%Y%m%d_%H%M%S")) or nil
-  local opts = {
-    filepath = save_path and filename and (save_path .. "/" .. filename) or nil,
-  }
-  local jsonPayload = export_buf_to_html(opts, "image")
   local system_args = nil
 
   local cwd = nil
@@ -491,7 +401,7 @@ M.image_to_clipboard = function()
         if res.success then
           Logger.info("Exported HTML to: " .. tostring(res.data.filepath))
         else
-          print("Export HTML failed: " .. vim.inspect(res))
+          print("Backend error when exporting HTML failed: " .. vim.inspect(res))
         end
       end
       if result.stderr and result.stderr ~= "" then
@@ -509,119 +419,113 @@ M.image_to_clipboard = function()
   system_obj:write(nil)
 end
 
-vim.api.nvim_create_user_command("SnapHTML", function()
-  local ok, path_or_err = pcall(M.html_to_clipboard)
-  if not ok then
-    vim.notify("SnapHTML failed", vim.log.levels.ERROR)
-    print("SnapHTML failed: \n\n" .. tostring(path_or_err))
-    return
+---Get default save path for screenshots
+---@return string|nil Default save path or nil
+M.get_default_save_path = function()
+  local home = vim.fn.expand("~")
+  local screenshots_dir = home .. "/Pictures/Screenshots"
+  if vim.fn.isdirectory(screenshots_dir) == 1 then
+    return screenshots_dir
   end
-end, { nargs = "?" })
-
-vim.api.nvim_create_user_command("SnapImage", function()
-  local ok, path_or_err = pcall(M.image_to_clipboard)
-  if not ok then
-    vim.notify("SnapImage failed", vim.log.levels.ERROR)
-    print("SnapImage failed: \n\n" .. tostring(path_or_err))
-    return
+  local conf = Config.get()
+  local filepath = conf.output_dir and vim.fn.fnamemodify(conf.output_dir, ":p") or nil
+  if filepath and vim.fn.isdirectory(filepath) == 1 then
+    return filepath
   end
-end, { nargs = "?", complete = "file" })
+  return nil
+end
 
----Get the visual selection or entire buffer content
----@return string content
----@return number start_line
----@return number end_line
----@return boolean has_selection
-local function get_content()
-  local start_line, end_line
-  local content = {}
-  local has_selection = false
-  local current_buf = vim.api.nvim_get_current_buf()
+---Export current buffer to HTML using backend
+---@param range SnapVisualRange|nil Visual range (optional)
+M.image_to_clipboard = function(range)
+  Backend.ensure_installed(Config.get().debug)
+  local conf = Config.get()
+  local save_path = M.get_default_save_path()
+  local filename = conf.filename_pattern and conf.filename_pattern:gsub("%%t", os.date("%Y%m%d_%H%M%S")) or nil
+  local jsonPayload = vim.fn.json_encode(export_buf_to_html({
+    filepath = save_path and filename and (save_path .. "/" .. filename) or nil,
+    range = range,
+    type = types.SnapPayloadType.image,
+  }))
+  local system_args = nil
 
-  -- First, try to get visual selection using marks
-  -- These marks are set when leaving visual mode
-  -- Use vim.fn.line() which is simpler and more reliable
-  local mark_start = vim.fn.line("'<")
-  local mark_end = vim.fn.line("'>")
+  local cwd = nil
 
-  -- Check if marks exist (non-zero means they exist)
-  if mark_start > 0 and mark_end > 0 then
-    -- Verify marks are valid for current buffer
-    local buf_line_count = vim.api.nvim_buf_line_count(0)
-    if mark_start <= buf_line_count and mark_end <= buf_line_count then
-      start_line = math.min(mark_start, mark_end)
-      end_line = math.max(mark_start, mark_end)
-      has_selection = true
+  if conf.debug ~= nil then
+    cwd = get_absolute_plugin_path("backend", conf.debug.backend)
+    if not vim.fn.isdirectory(cwd) then
+      error("Backend directory not found: " .. cwd)
     end
-  end
-
-  -- If no selection found via marks, check if we're currently in visual mode
-  if not has_selection then
-    local mode = vim.fn.mode()
-    if mode == "v" or mode == "V" or mode == "\22" then
-      -- Currently in visual mode - get selection directly
-      local start_pos = vim.fn.getpos("v")
-      local end_pos = vim.fn.getpos(".")
-      start_line = math.min(start_pos[2], end_pos[2])
-      end_line = math.max(start_pos[2], end_pos[2])
-      has_selection = true
+    -- Try to find backend bin in PATH
+    local backend_bin_path = vim.fn.exepath(conf.debug.backend)
+    if backend_bin_path == "" then
+      error(conf.debug.backend .. " executable not found in PATH")
+    else
+      system_args = { backend_bin_path, "run", "." }
     end
-  end
-
-  if has_selection then
-    -- Get the selected lines (end_line is inclusive)
-    local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
-    content = lines
   else
-    -- No selection, get entire buffer
-    local buf_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-    content = buf_lines
-    start_line = 1
-    end_line = #buf_lines
+    system_args = { BACKEND_BIN_PATH }
   end
 
-  return table.concat(content, "\n"), start_line, end_line, has_selection
+  local system_obj = vim.system(
+    system_args,
+    {
+      timeout = conf.timeout,
+      stdin = true,
+      cwd = cwd,
+      env = vim.fn.environ(),
+      text = true,
+    },
+    vim.schedule_wrap(function(result)
+      if result.stdout and result.stdout ~= "" then
+        local ok, res = pcall(vim.fn.json_decode, result.stdout)
+        if not ok then
+          Logger.warn("Failed to decode JSON output: " .. tostring(res))
+          return
+        end
+        if res.success then
+          Logger.info("Exported image to: " .. tostring(res.data.filepath))
+        else
+          print("Backend error when exporting image: " .. vim.inspect(res))
+        end
+      end
+      if result.stderr and result.stderr ~= "" then
+        print("Error exporting image: " .. vim.inspect(result.stderr))
+      end
+      if result.code ~= 0 then
+        print("Process exited with non-zero code: " .. tostring(result.code))
+      end
+    end)
+  )
+
+  -- Write JSON payload to stdin
+  system_obj:write(jsonPayload)
+  -- Close stdin to signal end of input
+  system_obj:write(nil)
 end
 
 ---Run the screenshot process
----@param range_start number|nil Start line from command range
----@param range_end number|nil End line from command range
-M.run = function(range_start, range_end)
-  local start_line, end_line, has_selection
-  local content = {}
-
+---@param range SnapRunOptions|nil Options for running the screenshot
+M.run = function(opts)
+  opts = opts or {}
+  local range = opts.range
+  local type = opts.type or types.SnapPayloadType.image
   -- If range is provided from command (visual mode), use it
-  if range_start and range_end and range_start > 0 and range_end > 0 then
-    start_line = math.min(range_start, range_end)
-    end_line = math.max(range_start, range_end)
-    has_selection = true
-    -- Get the selected lines (end_line is inclusive in nvim_buf_get_lines)
-    content = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
-    Logger.info(string.format("Extracted %d lines from buffer (lines %d-%d)", #content, start_line, end_line))
-  else
-    -- Otherwise, try to detect visual selection
-    Logger.info("No range provided, trying to detect visual selection...")
-    local content_result, start, end_line_num, has_sel = get_content()
-    start_line = start
-    end_line = end_line_num
-    has_selection = has_sel
-    content = vim.split(content_result, "\n")
-  end
-
-  -- Convert content array to string
-  local content_str = table.concat(content, "\n")
-  if not content_str or content_str == "" then
-    Logger.warn("No content to capture")
+  if range then
+    if type == types.SnapPayloadType.image then
+      M.image_to_clipboard(range)
+    else
+      M.html_to_clipboard(range)
+    end
     return
   end
+  -- Otherwise, get all content
+  Logger.info("No range provided, get all content")
 
-  -- Debug: log what we're capturing
-  if has_selection then
-    Logger.info(
-      string.format("Capturing selected lines %d-%d (%d lines, %d chars)", start_line, end_line, #content, #content_str)
-    )
+  if type == types.SnapPayloadType.image then
+    M.image_to_clipboard()
   else
-    Logger.info(string.format("Capturing full buffer (%d lines, %d chars)", #content, #content_str))
+    M.html_to_clipboard()
   end
 end
 

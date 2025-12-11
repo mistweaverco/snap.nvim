@@ -11,6 +11,7 @@
     "@eslint/markdown": "7.5.1",
     "@types/bun": "1.3.3",
     "eslint": "9.39.1",
+    "handlebars": "4.7.8",
     "globals": "16.5.0",
     "node-html-to-image": "5.0.0",
     "prettier": "3.7.4",

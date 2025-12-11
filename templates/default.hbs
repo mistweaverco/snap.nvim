@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>snap.nvim</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+    }
+    /*
+    #container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    */
+    pre#snap {
+      background-color: {{theme.bgColor}};
+      border-radius: 5px;
+      color: {{theme.fgColor}};
+      display: block;
+      font-family: '{{fontSettings.fonts.default.name}}', monospace;
+      font-size: {{fontSettings.size}}px;
+      line-height: {{fontSettings.line_height}};
+      margin: 20px auto;
+      max-width: fit-content;
+      padding: 15px;
+      white-space: pre; /* Preserve whitespace formatting */
+      word-break: keep-all; /* Prevent breaking words */
+    }
+    pre#snap .snap-is-italic {
+      font-family: '{{fontSettings.fonts.italic.name}}', monospace;
+      font-style: italic;
+    }
+    pre#snap .snap-is-bold {
+      font-family: '{{fontSettings.fonts.bold.name}}', monospace;
+      font-weight: bold;
+    }
+    pre#snap .snap-is-bold-italic {
+      font-family: '{{fontSettings.fonts.bold_italic.name}}', monospace;
+      font-style: italic;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <pre id="snap">{{{code}}}</pre>
+  </div>
+</body>
+</html>
