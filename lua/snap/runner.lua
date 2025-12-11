@@ -520,9 +520,6 @@ M.run = function(opts)
     end
     return
   end
-  -- Otherwise, get all content
-  Logger.info("No range provided, get all content")
-
   if type == types.SnapPayloadType.image then
     M.image_to_clipboard()
   else
