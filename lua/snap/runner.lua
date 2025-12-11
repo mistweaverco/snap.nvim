@@ -53,9 +53,9 @@ local function get_hl_by_name(name)
   -- e.g. "Normal", "Comment", etc.
   ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "@" .. name, link = false })
   if ok and hl then
-    if hl.link then
-      return get_hl_by_name(hl.link)
-    end
+    -- if hl.link then
+    --   return get_hl_by_name(hl.link)
+    -- end
     local t = {}
     if hl.fg then
       t.fg = convert_color_to_hex(hl.fg)
@@ -78,11 +78,11 @@ local function get_hl_by_name(name)
     end
     return t, "@" .. name
   end
-  ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name })
+  ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
   if ok and hl then
-    if hl.link then
-      return get_hl_by_name(hl.link)
-    end
+    -- if hl.link then
+    --   return get_hl_by_name(hl.link)
+    -- end
     local t = {}
     if hl.fg then
       t.fg = convert_color_to_hex(hl.fg)
@@ -146,24 +146,27 @@ end
 --- @param row number Line number (0-based)
 --- @param start_col number Start column (0-based)
 --- @param end_col number End column (0-based)
---- @return number|nil Index of existing highlight segment or nil
+--- @return table|nil Highlight segments or nil
 local exists_in_hl_map = function(hl_map, row, start_col, end_col)
   if not hl_map[row] then
     return nil
   end
-  for idx, seg in ipairs(hl_map[row]) do
+  local overlapping_segments = {}
+  for _, seg in ipairs(hl_map[row]) do
     if not (end_col <= seg.start_col or start_col >= seg.end_col) then
-      return idx
+      table.insert(overlapping_segments, seg)
     end
+  end
+  if #overlapping_segments > 0 then
+    return overlapping_segments
   end
   return nil
 end
 
 ---Build a table mapping line -> column -> highlight group using Tree-sitter
 ---@param bufnr number Buffer number
----@param range SnapVisualRange Visual range (optional)
 ---@return table hl_map Highlight map
-local function build_hl_map(bufnr, range)
+local function build_hl_map(bufnr)
   local ft = vim.bo[bufnr].filetype
   local parser = vim.treesitter.get_parser(bufnr, ft)
   if not parser then
@@ -181,9 +184,7 @@ local function build_hl_map(bufnr, range)
 
   local hl_map = {}
 
-  -- higher priority captures first,
-  -- so later captures do not override earlier ones
-  for id, node, _ in query:iter_captures(tree:root(), bufnr, range.start_line - 1, range.end_line) do
+  for id, node, _ in query:iter_captures(tree:root(), bufnr, 0, -1) do
     -- e.g. "punctuation.bracket", "function.builtin", "operator", "string", etc.
     local hl_group = query.captures[id]
     local start_row, start_col, end_row, end_col = node:range()
@@ -192,10 +193,7 @@ local function build_hl_map(bufnr, range)
       hl_map[r] = hl_map[r] or {}
       local c_start = (r == start_row) and start_col or 0
       local c_end = (r == end_row) and end_col or math.huge
-      local existing_idx = exists_in_hl_map(hl_map, r, c_start, c_end)
-      if existing_idx == nil then
-        table.insert(hl_map[r], { start_col = c_start, end_col = c_end, hl_group = hl_group })
-      end
+      table.insert(hl_map[r], { start_col = c_start, end_col = c_end, hl_group = hl_group })
     end
   end
 
@@ -211,9 +209,9 @@ local function get_hl_at(hl_map, row, col)
   if not hl_map[row] then
     return nil
   end
-  local exists = exists_in_hl_map(hl_map, row, col, col + 1)
-  if exists then
-    return hl_map[row][exists].hl_group
+  local existing_segments = exists_in_hl_map(hl_map, row, col, col + 1)
+  if existing_segments then
+    return existing_segments[#existing_segments].hl_group
   end
   return nil
 end
@@ -243,17 +241,13 @@ end
 ---@return SnapPayload JSON payload for backend
 local function export_buf_to_html(opts)
   opts = opts or {}
-  opts.range = opts.range or {
-    start_line = 1,
-    end_line = -1,
-  }
 
   local user_config = Config.get()
   local bufnr = vim.api.nvim_get_current_buf()
   local filepath = opts.filepath or default_output_path(bufnr)
 
-  local lines = vim.api.nvim_buf_get_lines(bufnr, opts.range.start_line - 1, opts.range.end_line, false)
-  local hl_map = build_hl_map(bufnr, opts.range)
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  local hl_map = build_hl_map(bufnr)
   local hl_style_cache = {}
 
   --- @type SnapPayload
@@ -348,6 +342,13 @@ local function export_buf_to_html(opts)
       end
     end
     table.insert(snap_payload.data.code, table.concat(out_line, ""))
+    -- if opts.range then
+    --   if row + 1 >= opts.range.start_line and row + 1 <= opts.range.end_line then
+    --     table.insert(snap_payload.data.code, table.concat(out_line, ""))
+    --   end
+    -- else
+    --   table.insert(snap_payload.data.code, table.concat(out_line, ""))
+    -- end
   end
   return snap_payload
 end
