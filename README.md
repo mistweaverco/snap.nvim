@@ -53,28 +53,55 @@ Via [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ## Configuration
 
+- `templateFilepath` (optional): Absolute path to a custom handlebars template file.
+  See the [default template](./templates/default.hbs) for reference.
+- `additional_template_data` (optional): A table of additional data to pass to your custom the handlebars template.
+   Available as `data.YOURKEY` variables in the template.
+
 ```lua
 {
   'mistweaverco/snap.nvim',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
+    templateFilepath = nil, -- Absolute path to a custom handlebars template file (optional)
+    -- Additional data to pass to the your custom handlebars template (optional)
+    additional_template_data = {
+      author = "Your Name",
+      website = "https://yourwebsite.com",
+    },
     output_dir = "$HOME/Pictures/Screenshots", -- Directory to save screenshots
     filename_pattern = "snap.nvim_%t.png", -- e.g., "snap.nvim_%t.png" (supports %t for timestamp)
     font_settings = {
+      size = 14,         -- Default font size for the screenshot
+      line_height = 0.8, -- Default line height for the screenshot
       default = {
-        name = "Fira Code", -- Default font name for the screenshot
+        name = "FiraCode Nerd Font", -- Default font name for the screenshot
         file = nil,         -- Absolute path to a custom font file (.ttf) (optional)
         -- Only needed if the font is not installed system-wide
         -- or if you want to export as HTML with the font embedded
         -- so you can view it correctly in E-mails or browsers
-
-        size = 14,         -- Default font size for the screenshot
-        line_height = 1.4, -- Default line height for the screenshot
+      },
+      -- Optional font settings for different text styles (bold, italic, bold_italic)
+      bold = {
+        name = "FiraCode Nerd Font", -- Font name for bold text
+        file = nil,         -- Absolute path to a custom font file (.ttf) (optional)
+        -- Only needed if the font is not installed system-wide
+        -- or if you want to export as HTML with the font embedded
+        -- so you can view it correctly in E-mails or browsers
       },
       italic = {
-        name = "Fira Code Italic", -- Font name for italic text
-        size = 14,                 -- Font size for italic text
-        line_height = 1.4,         -- Line height for italic text
+        name = "FiraCode Nerd Font", -- Font name for italic text
+        file = nil,         -- Absolute path to a custom font file (.ttf) (optional)
+        -- Only needed if the font is not installed system-wide
+        -- or if you want to export as HTML with the font embedded
+        -- so you can view it correctly in E-mails or browsers
+      },
+      bold_italic = {
+        name = "FiraCode Nerd Font", -- Font name for bold and italic text
+        file = nil,         -- Absolute path to a custom font file (.ttf) (optional)
+        -- Only needed if the font is not installed system-wide
+        -- or if you want to export as HTML with the font embedded
+        -- so you can view it correctly in E-mails or browsers
       },
     },
   },

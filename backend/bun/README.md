@@ -1,15 +1,17 @@
-# nodejs
+# Snap.nvim backend
+
+This is an uncomplicated backend cli tool for
+[Snap.nvim](https://github.com/mistweaverco/snap.nvim)
 
 To install dependencies:
 
 ```bash
-bun install
+bun install --frozen-lockfile
 ```
 
 To run:
 
 ```bash
-bun run src/index.ts
+echo '{"foo": "bar"}' | bun run src/index.ts
 ```
 
-This project was created using `bun init` in bun v1.3.3. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
