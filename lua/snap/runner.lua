@@ -341,14 +341,14 @@ local function export_buf_to_html(opts)
         table.insert(out_line, html_escape(current_segment))
       end
     end
-    table.insert(snap_payload.data.code, table.concat(out_line, ""))
-    -- if opts.range then
-    --   if row + 1 >= opts.range.start_line and row + 1 <= opts.range.end_line then
-    --     table.insert(snap_payload.data.code, table.concat(out_line, ""))
-    --   end
-    -- else
-    --   table.insert(snap_payload.data.code, table.concat(out_line, ""))
-    -- end
+    -- table.insert(snap_payload.data.code, table.concat(out_line, ""))
+    if opts.range then
+      if row >= opts.range.start_line and row <= opts.range.end_line then
+        table.insert(snap_payload.data.code, table.concat(out_line, ""))
+      end
+    else
+      table.insert(snap_payload.data.code, table.concat(out_line, ""))
+    end
   end
   return snap_payload
 end
