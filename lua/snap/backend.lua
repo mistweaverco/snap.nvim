@@ -91,7 +91,7 @@ end
 ---@param output_path string Path to save the file to
 ---@param callback function|nil Optional callback to run after download completes
 local function download_file_async(url, output_path, callback)
-  local cmd = { "curl", "-L", "-o", output_path, url }
+  local cmd = { "curl", "-fL", "-o", output_path, url }
   vim.system(
     cmd,
     {
@@ -123,7 +123,7 @@ end
 ---@param output_path string Path to save the file to
 ---@return boolean success Whether the download succeeded
 local function download_file_sync(url, output_path)
-  local cmd = { "curl", "-L", "-o", output_path, "--silent", "--show-error", url }
+  local cmd = { "curl", "-fL", "-o", output_path, "--silent", "--show-error", url }
   local result = vim.fn.system(cmd)
   local exit_code = vim.v.shell_error
   if exit_code ~= 0 then
