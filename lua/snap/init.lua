@@ -4,7 +4,7 @@ local Api = require("snap.api")
 local M = {}
 
 ---Sets up Snap with the provided configuration.
----@param config SnapConfig|nil Configuration table for Snap
+---@param config SnapUserConfig|nil Configuration table for Snap
 M.setup = function(config)
   Api.setup(config)
 end
