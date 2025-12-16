@@ -16,8 +16,8 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-SUPPORTED_PLATFORMS=("linux-amd64" "linux-arm64" "macos-amd64" "macos-arm64" "windows-amd64" "windows-arm64")
-CI_SUPPORTED_PLATFORMS=("ubuntu-latest-x86_64" "ubuntu-latest-aarch64" "macos-latest-x86_64" "macos-latest-aarch64" "windows-latest-x86_64" "windows-latest-aarch64")
+SUPPORTED_PLATFORMS=("linux-x86_64" "linux-aarch64" "macos-x86_64" "macos-arm64" "windows-x86_64" "windows-aarch64")
+CI_SUPPORTED_PLATFORMS=("linux-x86_64" "linux-aarch64" "macos-x86_64" "macos-arm64" "windows-x86_64" "windows-aarch64")
 
 SUPPORTED_BACKENDS=("bun")
 
@@ -60,35 +60,35 @@ case "$BACKEND" in
 esac
 
 case "$PLATFORM" in
-  "linux-amd64"|"ubuntu-latest-x86_64")
+  "linux-x86_64")
     BUILD_TARGET="linux-x64"
-    PLATFORM_CI_AGNOSTIC_NAME="linux-amd64"
+    PLATFORM_NAME="linux-x86_64"
     PLATFORM_ICON="🐧"
     ;;
-  "linux-arm64"|"ubuntu-latest-aarch64")
+  "linux-aarch64")
     BUILD_TARGET="linux-arm64"
-    PLATFORM_CI_AGNOSTIC_NAME="linux-arm64"
+    PLATFORM_NAME="linux-aarch64"
     PLATFORM_ICON="🐧"
     ;;
-  "macos-amd64"|"macos-latest-x86_64")
+  "macos-x86_64")
     BUILD_TARGET="darwin-x64"
-    PLATFORM_CI_AGNOSTIC_NAME="macos-amd64"
+    PLATFORM_NAME="macos-x86_64"
     PLATFORM_ICON="🍎"
     ;;
-  "macos-arm64"|"macos-latest-aarch64")
+  "macos-arm64")
     BUILD_TARGET="darwin-arm64"
-    PLATFORM_CI_AGNOSTIC_NAME="macos-arm64"
+    PLATFORM_NAME="macos-arm64"
     PLATFORM_ICON="🍎"
     ;;
-  "windows-amd64"|"windows-latest-x86_64")
+  "windows-x86_64")
     BUILD_TARGET="windows-x64"
-    PLATFORM_CI_AGNOSTIC_NAME="windows-amd64"
+    PLATFORM_NAME="windows-x86_64"
     PLATFORM_ICON="🪟"
     BIN_EXT=".exe"
     ;;
-  "windows-arm64"|"windows-latest-aarch64")
+  "windows-aarch64")
     BUILD_TARGET="windows-arm64"
-    PLATFORM_CI_AGNOSTIC_NAME="windows-arm64"
+    PLATFORM_NAME="windows-aarch64"
     PLATFORM_ICON="🪟"
     BIN_EXT=".exe"
     ;;
@@ -115,7 +115,7 @@ fi
 echo " 🔨 Building for backend: $BACKEND $BACKEND_ICON, platform: $PLATFORM $PLATFORM_ICON"
 echo
 
-bun build --compile --target="bun-$BUILD_TARGET" ./src/index.ts --outfile "../../dist/snap-nvim-${PLATFORM_CI_AGNOSTIC_NAME}${BIN_EXT}" || { echo " ❌ Build failed.";echo;exit 1; }
+bun build --compile --target="bun-$BUILD_TARGET" ./src/index.ts --outfile "../../dist/snap-nvim-${PLATFORM_NAME}${BIN_EXT}" || { echo " ❌ Build failed.";echo;exit 1; }
 
 if [ "$CI" == false ]; then
   echo " ✅ Build completed successfully in non CI ☁️ environment."
