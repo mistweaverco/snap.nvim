@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import Handlebars from "handlebars";
 import nodeHtmlToImage from "node-html-to-image";
+import defaultTemplatePath from "../../../templates/default.hbs" with { type: "file" };
 import {
   copyBufferToClipboard,
   getJSONFromStdin,
@@ -31,20 +32,16 @@ const main = async () => {
     return;
   }
 
-  let templateFilepath = path.resolve(
-    __dirname,
-    "..",
-    "..",
-    "..",
-    "templates",
-    "default.hbs",
-  );
+  let html: string;
 
   if (jsonPayload.data.templateFilepath) {
-    templateFilepath = path.resolve(jsonPayload.data.templateFilepath);
+    // User provided a custom template path
+    const templateFilepath = path.resolve(jsonPayload.data.templateFilepath);
+    html = fs.readFileSync(templateFilepath, "utf-8");
+  } else {
+    // Use the embedded default template
+    html = await Bun.file(defaultTemplatePath).text();
   }
-
-  const html = fs.readFileSync(templateFilepath, "utf-8");
   let json: JSONObjectImageSuccessRequest | JSONObjectHTMLSuccessRequest;
 
   let buffer: NodeHTMLToImageBuffer;

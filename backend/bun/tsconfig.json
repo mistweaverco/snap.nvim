@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    // Enable Bun types
+    "types": ["bun"],
+
     // Environment setup & latest features
     "lib": ["ESNext"],
     "target": "ESNext",
