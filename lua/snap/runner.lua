@@ -37,14 +37,24 @@ pcall(function()
   end
 end)
 
----Get highlight definition by name
+---Get highlight definition by name, following links recursively
 ---@param name string Highlight group name
+---@param visited table|nil Set of visited highlight names to prevent infinite loops
 ---@return table|nil Highlight definition table or nil
 ---@return string|nil Actual highlight group name used
-local function get_hl_by_name(name)
+local function get_hl_by_name(name, visited)
   if not name or name == "" then
     return nil, nil
   end
+  
+  visited = visited or {}
+  
+  -- Prevent infinite loops from circular links
+  if visited[name] then
+    return nil, nil
+  end
+  visited[name] = true
+  
   local ok, hl
   -- HACK:
   -- we need to prepend "@" to make it a valid tree-sitter highlight group
@@ -53,9 +63,11 @@ local function get_hl_by_name(name)
   -- e.g. "Normal", "Comment", etc.
   ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "@" .. name, link = false })
   if ok and hl then
-    -- if hl.link then
-    --   return get_hl_by_name(hl.link)
-    -- end
+    -- Follow link if present
+    if hl.link and hl.link ~= "" then
+      return get_hl_by_name(hl.link, visited)
+    end
+    
     local t = {}
     if hl.fg then
       t.fg = convert_color_to_hex(hl.fg)
@@ -78,11 +90,14 @@ local function get_hl_by_name(name)
     end
     return t, "@" .. name
   end
+  
   ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
   if ok and hl then
-    -- if hl.link then
-    --   return get_hl_by_name(hl.link)
-    -- end
+    -- Follow link if present
+    if hl.link and hl.link ~= "" then
+      return get_hl_by_name(hl.link, visited)
+    end
+    
     local t = {}
     if hl.fg then
       t.fg = convert_color_to_hex(hl.fg)
@@ -163,38 +178,110 @@ local exists_in_hl_map = function(hl_map, row, start_col, end_col)
   return nil
 end
 
+---Build a table mapping line -> column -> highlight group using syntax highlighting (fallback)
+---@param bufnr number Buffer number
+---@return table hl_map Highlight map
+local function build_hl_map_fallback(bufnr)
+  local hl_map = {}
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+
+  for row_idx, line in ipairs(lines) do
+    local row = row_idx - 1 -- Convert to 0-based
+    hl_map[row] = {}
+
+    -- Skip empty lines
+    if #line > 0 then
+      local current_hl = nil
+      local segment_start = 0
+
+      for col = 0, #line - 1 do
+        -- Get syntax ID at this position and resolve to actual highlight group
+        local syn_id = vim.fn.synID(row + 1, col + 1, 1) -- synID uses 1-based indexing
+        local trans_id = vim.fn.synIDtrans(syn_id) -- Get resolved highlight group (follows links)
+        local hl_name = vim.fn.synIDattr(trans_id, "name")
+
+        -- Normalize empty highlight names to "Normal"
+        if hl_name == "" or hl_name == nil then
+          hl_name = "Normal"
+        end
+
+        if hl_name ~= current_hl then
+          -- Save previous segment if it exists
+          if current_hl and segment_start < col then
+            table.insert(hl_map[row], {
+              start_col = segment_start,
+              end_col = col,
+              hl_group = current_hl,
+            })
+          end
+          current_hl = hl_name
+          segment_start = col
+        end
+      end
+
+      -- Save the last segment
+      if current_hl and segment_start < #line then
+        table.insert(hl_map[row], {
+          start_col = segment_start,
+          end_col = #line,
+          hl_group = current_hl,
+        })
+      end
+    end
+  end
+
+  return hl_map
+end
+
 ---Build a table mapping line -> column -> highlight group using Tree-sitter
 ---@param bufnr number Buffer number
 ---@return table hl_map Highlight map
 local function build_hl_map(bufnr)
-  local ft = vim.bo[bufnr].filetype
-  local parser = vim.treesitter.get_parser(bufnr, ft)
-  if not parser then
-    return {}
-  end
-  local tree = parser:parse()[1]
-  if not tree then
-    return {}
+  -- Check if treesitter is available
+  local ok, parser = pcall(function()
+    local ft = vim.bo[bufnr].filetype
+    return vim.treesitter.get_parser(bufnr, ft)
+  end)
+
+  if not ok or not parser then
+    -- Treesitter not available, use fallback
+    return build_hl_map_fallback(bufnr)
   end
 
+  local tree = parser:parse()[1]
+  if not tree then
+    -- Tree parsing failed, use fallback
+    return build_hl_map_fallback(bufnr)
+  end
+
+  local ft = vim.bo[bufnr].filetype
   local query = vim.treesitter.query.get(ft, "highlights")
   if not query then
-    return {}
+    -- Query not available, use fallback
+    return build_hl_map_fallback(bufnr)
   end
 
   local hl_map = {}
 
-  for id, node, _ in query:iter_captures(tree:root(), bufnr, 0, -1) do
-    -- e.g. "punctuation.bracket", "function.builtin", "operator", "string", etc.
-    local hl_group = query.captures[id]
-    local start_row, start_col, end_row, end_col = node:range()
+  -- Use pcall to safely iterate captures
+  local capture_ok, _ = pcall(function()
+    for id, node, _ in query:iter_captures(tree:root(), bufnr, 0, -1) do
+      -- e.g. "punctuation.bracket", "function.builtin", "operator", "string", etc.
+      local hl_group = query.captures[id]
+      local start_row, start_col, end_row, end_col = node:range()
 
-    for r = start_row, end_row do
-      hl_map[r] = hl_map[r] or {}
-      local c_start = (r == start_row) and start_col or 0
-      local c_end = (r == end_row) and end_col or math.huge
-      table.insert(hl_map[r], { start_col = c_start, end_col = c_end, hl_group = hl_group })
+      for r = start_row, end_row do
+        hl_map[r] = hl_map[r] or {}
+        local c_start = (r == start_row) and start_col or 0
+        local c_end = (r == end_row) and end_col or math.huge
+        table.insert(hl_map[r], { start_col = c_start, end_col = c_end, hl_group = hl_group })
+      end
     end
+  end)
+
+  if not capture_ok then
+    -- Capture iteration failed, use fallback
+    return build_hl_map_fallback(bufnr)
   end
 
   return hl_map
