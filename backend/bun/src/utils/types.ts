@@ -39,6 +39,7 @@ export interface JSONObjectHTMLSuccessRequest {
     transparent: boolean;
     code: string[];
     filepath: string;
+    minWidth: number;
   };
 }
 
@@ -59,6 +60,7 @@ export interface JSONObjectImageSuccessRequest {
     transparent: boolean;
     code: string[];
     filepath: string;
+    minWidth: number;
   };
 }
 

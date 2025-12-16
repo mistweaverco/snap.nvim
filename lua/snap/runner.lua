@@ -464,15 +464,31 @@ local function export_buf_to_html(opts)
       outputImageFormat = types.SnapImageOutputFormat.png,
       templateFilepath = user_config.templateFilepath or nil,
       transparent = true,
+      minWidth = 0,
       type = opts.type or types.SnapPayloadType.html,
     },
   }
+
+  -- Calculate the longest line length (in characters) for min width calculation
+  local longest_line_len = 0
+  for _, line in ipairs(lines) do
+    if #line > longest_line_len then
+      longest_line_len = #line
+    end
+  end
+
+  -- Calculate minimum width in pixels
+  -- Monospace character width is approximately 0.6 * font_size
+  -- Add padding (15px * 2 = 30px from template)
+  local font_size = snap_payload.data.fontSettings.size or 14
+  local char_width_factor = 0.6
+  local padding = 30
+  snap_payload.data.minWidth = math.ceil(longest_line_len * font_size * char_width_factor) + padding
 
   for row, line in ipairs(lines) do
     local out_line = {}
     local col = 0
     local current_hl = nil
-    local current_resolved_hl = nil
     local current_segment = ""
     while col < #line do
       local ch = line:sub(col + 1, col + 1)

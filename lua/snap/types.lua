@@ -69,6 +69,7 @@ M.SnapConfigFontSettingsFont = {
 ---@field code table[] Array of code lines with their respective highlight styles
 ---@field filepath string
 ---@field fontSettings SnapConfigFontSettings
+---@field minWidth number Minimum width in pixels based on longest line
 ---@field outputImageFormat SnapImageOutputFormat
 ---@field templateFilepath string|nil
 ---@field transparent boolean

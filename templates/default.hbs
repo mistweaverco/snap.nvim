@@ -4,18 +4,15 @@
   <meta charset="utf-8">
   <title>snap.nvim</title>
   <style>
-    body {
+    html, body {
       margin: 0;
-      padding: 20px;
+      padding: 0;
+      background-color: transparent;
     }
-    /*
-    #container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+    body {
+      padding: 10px 20px;
+      width: calc({{minWidth}}px + 30px);
     }
-    */
     pre#snap {
       background-color: {{theme.bgColor}};
       border-radius: 5px;
