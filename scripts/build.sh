@@ -16,8 +16,8 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-SUPPORTED_PLATFORMS=("linux-x86_64" "linux-aarch64" "macos-x86_64" "macos-arm64" "windows-x86_64" "windows-aarch64")
-CI_SUPPORTED_PLATFORMS=("linux-x86_64" "linux-aarch64" "macos-x86_64" "macos-arm64" "windows-x86_64" "windows-aarch64")
+SUPPORTED_PLATFORMS=("linux-x86_64" "linux-aarch64" "macos-x86_64" "macos-arm64" "windows-x86_64")
+CI_SUPPORTED_PLATFORMS=("linux-x86_64" "linux-aarch64" "macos-x86_64" "macos-arm64" "windows-x86_64")
 
 SUPPORTED_BACKENDS=("bun")
 
@@ -83,12 +83,6 @@ case "$PLATFORM" in
   "windows-x86_64")
     BUILD_TARGET="windows-x64"
     PLATFORM_NAME="windows-x86_64"
-    PLATFORM_ICON="🪟"
-    BIN_EXT=".exe"
-    ;;
-  "windows-aarch64")
-    BUILD_TARGET="windows-arm64"
-    PLATFORM_NAME="windows-aarch64"
     PLATFORM_ICON="🪟"
     BIN_EXT=".exe"
     ;;
