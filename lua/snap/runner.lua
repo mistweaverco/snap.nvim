@@ -37,89 +37,70 @@ pcall(function()
   end
 end)
 
----Get highlight definition by name, following links recursively
+---Get highlight definition by name, resolving links
 ---@param name string Highlight group name
----@param visited table|nil Set of visited highlight names to prevent infinite loops
 ---@return table|nil Highlight definition table or nil
 ---@return string|nil Actual highlight group name used
-local function get_hl_by_name(name, visited)
+local function get_hl_by_name(name)
   if not name or name == "" then
     return nil, nil
   end
-  
-  visited = visited or {}
-  
-  -- Prevent infinite loops from circular links
-  if visited[name] then
-    return nil, nil
+
+  ---Helper to extract highlight properties from hl definition
+  ---@param hl table Highlight definition from nvim_get_hl
+  ---@return table Normalized highlight table
+  local function extract_hl_props(hl)
+    local t = {}
+    if hl.fg then
+      t.fg = convert_color_to_hex(hl.fg)
+    else
+      t.fg = DEFAULT_FG
+    end
+    if hl.bg then
+      t.bg = convert_color_to_hex(hl.bg)
+    else
+      t.bg = DEFAULT_BG
+    end
+    if hl.bold then
+      t.bold = true
+    end
+    if hl.italic then
+      t.italic = true
+    end
+    if hl.underline then
+      t.underline = true
+    end
+    return t
   end
-  visited[name] = true
-  
+
   local ok, hl
+
+  -- If the name already starts with "@" (e.g. @lsp.type.variable from semantic tokens),
+  -- try it directly first. nvim_get_hl with link=false resolves link chains automatically.
+  if name:sub(1, 1) == "@" then
+    ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+    if ok and hl and next(hl) then
+      return extract_hl_props(hl), name
+    end
+  end
+
   -- HACK:
   -- we need to prepend "@" to make it a valid tree-sitter highlight group
   -- e.g. "function.builtin" -> "@function.builtin"
   -- but some highlight groups are not prefixed, so we try both
   -- e.g. "Normal", "Comment", etc.
-  ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "@" .. name, link = false })
-  if ok and hl then
-    -- Follow link if present
-    if hl.link and hl.link ~= "" then
-      return get_hl_by_name(hl.link, visited)
+  if name:sub(1, 1) ~= "@" then
+    ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "@" .. name, link = false })
+    if ok and hl and next(hl) then
+      return extract_hl_props(hl), "@" .. name
     end
-    
-    local t = {}
-    if hl.fg then
-      t.fg = convert_color_to_hex(hl.fg)
-    else
-      t.fg = DEFAULT_FG
-    end
-    if hl.bg then
-      t.bg = convert_color_to_hex(hl.bg)
-    else
-      t.bg = DEFAULT_BG
-    end
-    if hl.bold then
-      t.bold = true
-    end
-    if hl.italic then
-      t.italic = true
-    end
-    if hl.underline then
-      t.underline = true
-    end
-    return t, "@" .. name
   end
-  
+
   ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
-  if ok and hl then
-    -- Follow link if present
-    if hl.link and hl.link ~= "" then
-      return get_hl_by_name(hl.link, visited)
-    end
-    
-    local t = {}
-    if hl.fg then
-      t.fg = convert_color_to_hex(hl.fg)
-    else
-      t.fg = DEFAULT_FG
-    end
-    if hl.bg then
-      t.bg = convert_color_to_hex(hl.bg)
-    else
-      t.bg = DEFAULT_BG
-    end
-    if hl.bold then
-      t.bold = true
-    end
-    if hl.italic then
-      t.italic = true
-    end
-    if hl.underline then
-      t.underline = true
-    end
-    return t, name
+  if ok and hl and next(hl) then
+    return extract_hl_props(hl), name
   end
+
   return nil, nil
 end
 
@@ -236,7 +217,7 @@ end
 ---Build a table mapping line -> column -> highlight group using Tree-sitter
 ---@param bufnr number Buffer number
 ---@return table hl_map Highlight map
-local function build_hl_map(bufnr)
+local function build_hl_map_treesitter(bufnr)
   -- Check if treesitter is available
   local ok, parser = pcall(function()
     local ft = vim.bo[bufnr].filetype
@@ -287,12 +268,142 @@ local function build_hl_map(bufnr)
   return hl_map
 end
 
----Get highlight group at specific position
----@param hl_map table Highlight map
----@param row number Line number (0-based)
----@param col number Column number (0-based)
+---Build a table mapping line -> column -> highlight group
+---Uses Tree-sitter with syntax highlighting fallback
+---Note: Semantic tokens are resolved at lookup time via get_hl_at for accuracy
+---@param bufnr number Buffer number
+---@return table hl_map Highlight map
+local function build_hl_map(bufnr)
+  return build_hl_map_treesitter(bufnr)
+end
+
+---Extract semantic token highlight from vim.inspect_pos result
+---Semantic tokens can be in extmarks (with ns matching "semantic_tokens") or in semantic_tokens field
+---Returns the highest priority semantic token highlight
+---@param info table Result from vim.inspect_pos
 ---@return string|nil Highlight group name or nil
-local function get_hl_at(hl_map, row, col)
+local function extract_semantic_hl(info)
+  if not info then
+    return nil
+  end
+
+  local best_hl = nil
+  local best_priority = -1
+
+  -- Check extmarks for semantic tokens (namespace contains "semantic_tokens")
+  if info.extmarks then
+    for _, extmark in ipairs(info.extmarks) do
+      local ns = extmark.ns or ""
+      if ns:match("semantic_tokens") then
+        local hl = extmark.opts and extmark.opts.hl_group
+        local priority = (extmark.opts and extmark.opts.priority) or 0
+
+        if hl and priority > best_priority then
+          best_hl = hl
+          best_priority = priority
+        end
+      end
+    end
+  end
+
+  -- Also check semantic_tokens field (older Neovim versions or different structure)
+  if info.semantic_tokens then
+    for _, token in ipairs(info.semantic_tokens) do
+      local hl = token.hl_group or (token.opts and token.opts.hl_group)
+      local priority = token.priority or (token.opts and token.opts.priority) or 0
+
+      if hl and priority > best_priority then
+        best_hl = hl
+        best_priority = priority
+      end
+    end
+  end
+
+  return best_hl
+end
+
+---Extract treesitter capture from vim.inspect_pos result
+---@param info table Result from vim.inspect_pos
+---@return string|nil Highlight group name or nil
+local function extract_treesitter_hl(info)
+  if info and info.treesitter and #info.treesitter > 0 then
+    -- Get the last (most specific) treesitter capture
+    local capture = info.treesitter[#info.treesitter]
+    -- Use hl_group which includes the language suffix (e.g., "@variable.lua")
+    if capture.hl_group then
+      return capture.hl_group
+    elseif capture.capture then
+      return capture.capture
+    end
+  end
+  return nil
+end
+
+---Get highlight group at specific position using vim.inspect_pos
+---This reliably gets all highlights including semantic tokens, treesitter, and syntax
+---Priority: semantic_tokens > treesitter > syntax > extmarks
+---@param bufnr number Buffer number
+---@param row number Line number (0-based)
+---@param col number Column number (0-based byte offset)
+---@return string|nil Highlight group name or nil
+local function get_hl_at_pos(bufnr, row, col)
+  -- Use vim.inspect_pos which reliably returns all highlights at a position
+  local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
+  if not ok or not info then
+    return nil
+  end
+
+  -- Priority 1: Semantic tokens (highest precedence)
+  local semantic_hl = extract_semantic_hl(info)
+  if semantic_hl then
+    return semantic_hl
+  end
+
+  -- Priority 2: Treesitter captures
+  local treesitter_hl = extract_treesitter_hl(info)
+  if treesitter_hl then
+    return treesitter_hl
+  end
+
+  -- Priority 3: Syntax highlighting
+  if info.syntax and #info.syntax > 0 then
+    local syn = info.syntax[#info.syntax]
+    if syn.hl_group then
+      return syn.hl_group
+    end
+  end
+
+  -- Priority 4: Extmarks with highlights
+  if info.extmarks and #info.extmarks > 0 then
+    for i = #info.extmarks, 1, -1 do
+      local extmark = info.extmarks[i]
+      if extmark.opts and extmark.opts.hl_group then
+        return extmark.opts.hl_group
+      end
+    end
+  end
+
+  return nil
+end
+
+---Get highlight group at specific position
+---Uses vim.inspect_pos for accurate results including semantic tokens
+---Falls back to hl_map lookup if vim.inspect_pos is not available
+---@param hl_map table Highlight map (used as fallback)
+---@param bufnr number Buffer number
+---@param row number Line number (0-based)
+---@param col number Column number (0-based byte offset)
+---@return string|nil Highlight group name or nil
+local function get_hl_at(hl_map, bufnr, row, col)
+  -- Try vim.inspect_pos first (Neovim 0.9+) for accurate semantic token support
+  if vim.inspect_pos then
+    local hl = get_hl_at_pos(bufnr, row, col)
+    if hl then
+      return hl
+    end
+  end
+
+  -- Fallback to hl_map lookup
   if not hl_map[row] then
     return nil
   end
@@ -357,7 +468,7 @@ local function export_buf_to_html(opts)
     },
   }
 
-  for row, line in pairs(lines) do
+  for row, line in ipairs(lines) do
     local out_line = {}
     local col = 0
     local current_hl = nil
@@ -365,18 +476,22 @@ local function export_buf_to_html(opts)
     local current_segment = ""
     while col < #line do
       local ch = line:sub(col + 1, col + 1)
-      local hl_group = get_hl_at(hl_map, row - 1, col)
+      local hl_group = get_hl_at(hl_map, bufnr, row - 1, col)
       if hl_group ~= current_hl then
         if current_segment ~= "" then
           ---@type SnapHighlightStyle|nil
           local style = nil
+          local resolved_hl = nil
           if current_hl then
-            style = hl_style_cache[current_hl]
-            if not style then
+            local cached = hl_style_cache[current_hl]
+            if cached then
+              style = cached.style
+              resolved_hl = cached.resolved_hl
+            else
               local hldef
-              hldef, current_resolved_hl = get_hl_by_name(current_hl)
+              hldef, resolved_hl = get_hl_by_name(current_hl)
               style = hl_table_to_style(hldef)
-              hl_style_cache[current_hl] = style
+              hl_style_cache[current_hl] = { style = style, resolved_hl = resolved_hl }
             end
           end
           if style then
@@ -384,7 +499,7 @@ local function export_buf_to_html(opts)
               out_line,
               string.format(
                 '<span data-hlgroup="%s" style="%s" class="%s">%s</span>',
-                current_resolved_hl or "default",
+                resolved_hl or current_hl or "default",
                 style.inline_css,
                 style.cls_name,
                 html_escape(current_segment)
@@ -404,13 +519,17 @@ local function export_buf_to_html(opts)
     if current_segment ~= "" then
       ---@type SnapHighlightStyle|nil
       local style = nil
+      local resolved_hl = nil
       if current_hl then
-        style = hl_style_cache[current_hl]
-        if not style then
+        local cached = hl_style_cache[current_hl]
+        if cached then
+          style = cached.style
+          resolved_hl = cached.resolved_hl
+        else
           local hldef
-          hldef, current_resolved_hl = get_hl_by_name(current_hl)
+          hldef, resolved_hl = get_hl_by_name(current_hl)
           style = hl_table_to_style(hldef)
-          hl_style_cache[current_hl] = style
+          hl_style_cache[current_hl] = { style = style, resolved_hl = resolved_hl }
         end
       end
       if style then
@@ -418,7 +537,7 @@ local function export_buf_to_html(opts)
           out_line,
           string.format(
             '<span data-hlgroup="%s" style="%s" class="%s">%s</span>',
-            current_resolved_hl or "default",
+            resolved_hl or current_hl or "default",
             style.inline_css,
             style.cls_name,
             html_escape(current_segment)
