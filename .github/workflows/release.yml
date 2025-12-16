@@ -9,16 +9,28 @@ on:
 jobs:
   build:
     name: Build ${{ matrix.platform }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        platform:
-          - linux-x86_64
-          - linux-aarch64
-          - macos-x86_64
-          - macos-arm64
-          - windows-x86_64
-          - windows-aarch64
+        include:
+          # Linux builds (cross-compile ARM from x86)
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+          - platform: linux-aarch64
+            runner: ubuntu-latest
+
+          # macOS builds (native)
+          - platform: macos-x86_64
+            runner: macos-latest
+          - platform: macos-arm64
+            runner: macos-latest
+
+          # Windows builds (native)
+          - platform: windows-x86_64
+            runner: windows-latest
+          # windows-aarch64 not available (no ARM64 Windows runners)
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,16 +46,30 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: bun-${{ hashFiles('**/bun.lock') }}
+          key: bun-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
           restore-keys: |
-            bun-${{ hashFiles('**/bun.lock') }}
+            bun-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
 
-      - name: Set version
+      - name: Set version (Unix)
+        if: runner.os != 'Windows'
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Build
+      - name: Set version (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.ref_name }}" -replace '^v', ''
+          echo "VERSION=$VERSION" >> $env:GITHUB_ENV
+
+      - name: Build (Unix)
+        if: runner.os != 'Windows'
+        run: ./scripts/build.sh bun ${{ matrix.platform }}
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
         run: ./scripts/build.sh bun ${{ matrix.platform }}
 
       - name: Upload artifact
