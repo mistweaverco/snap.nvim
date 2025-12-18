@@ -1,5 +1,10 @@
 local M = {}
 
+---@enum SnapConfigTemplate
+M.SnapConfigTemplate = {
+  default = "default",
+}
+
 ---@enum SnapPayloadType
 M.SnapPayloadType = {
   image = "image",
@@ -52,19 +57,21 @@ M.SnapConfigFontSettingsFont = {
 ---@class SnapUserConfig
 ---@field user_command string|nil Name of the user command to take screenshots, defaults to "Snap"
 ---@field debug SnapConfigDebug|nil Debug configuration
+---@field template SnapConfigTemplate|nil Built-in template name or "default"
 ---@field templateFilepath string|nil Absolute path to a custom HTML template file (optional)
 ---@field additional_template_data table|nil Table of additional data to pass to the template (optional)
 ---@field output_dir string|nil Output directory for screenshots (defaults to $HOME/Pictures/Screenshots if nil)
 ---@field timeout number|nil Timeout for screenshot operations in milliseconds
 ---@field filename_pattern string|nil Screenshot filename pattern (supports %t for timestamp)
+---@field copy_to_clipboard SnapConfigCopyToClipboard|nil Copy to clipboard settings
 ---@field font_settings SnapConfigFontSettings|nil Font settings for the screenshot
 
 ---@class SnapPayloadDataTheme theme colors for the screenshot
 ---@field bgColor string Background color in hex format (e.g., "#000000")
----field fgColor string Foreground color in hex format (e.g., "#ffffff")
+---@field fgColor string Foreground color in hex format (e.g., "#ffffff")
 
 ---@class SnapPayloadData
----field theme SnapPayloadDataTheme Theme colors for the screenshot
+---@field theme SnapPayloadDataTheme Theme colors for the screenshot
 ---@field additional_template_data table
 ---@field code table[] Array of code lines with their respective highlight styles
 ---@field filepath string
@@ -105,6 +112,11 @@ M.SnapConfigFontSettingsFont = {
 ---@field backend SnapConfigBackend Screenshot backend to debug
 ---@field log_level string Log level for debugging (e.g., "info", "debug", "warn", "error")
 
+---SnapConfigCopyToClipboard configuration for copy to clipboard settings
+---@class SnapConfigCopyToClipboard
+---@field image boolean Whether to copy the image to clipboard
+---@field html boolean Whether to copy the HTML to clipboard
+
 ---Default configuration for the screenshot plugin
 ---@class SnapConfig
 ---@field user_command string Name of the user command to take screenshots, defaults to "Snap"
@@ -113,6 +125,8 @@ M.SnapConfigFontSettingsFont = {
 ---@field additional_template_data table|nil Table of additional data to pass to the template (optional)
 ---@field output_dir string|nil Output directory for screenshots (defaults to $HOME/Pictures/Screenshots if nil)
 ---@field timeout number Timeout for screenshot operations in milliseconds
+---@field template SnapConfigTemplate Built-in template name or "default"
 ---@field filename_pattern string Screenshot filename pattern (supports %t for timestamp)
+---@field copy_to_clipboard SnapConfigCopyToClipboard Copy to clipboard settings
 ---@field font_settings SnapConfigFontSettings Font settings for the screenshot
 return M

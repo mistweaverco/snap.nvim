@@ -8,15 +8,20 @@ M.defaults = {
   user_command = "Snap", -- Name of the user command to take screenshots
   debug = nil,
   timeout = 5000,
+  template = "default", -- Built-in template name or "default"
   templateFilepath = nil, -- Absolute path to a custom HTML template file (optional)
   additional_template_data = nil, -- Table of additional data to pass to the template (optional)
   -- Output directory for screenshots (defaults to $HOME/Pictrures/Screenshots if nil)
   output_dir = nil,
   -- Screenshot filename pattern (supports %t for timestamp)
   filename_pattern = "snap.nvim_%t.png",
+  copy_to_clipboard = {
+    image = true, -- Whether to copy the image to clipboard
+    html = true, -- Whether to copy the HTML to clipboard
+  },
   font_settings = {
     size = 14, -- Default font size for the screenshot
-    line_height = 1.4, -- Default line height for the screenshot
+    line_height = 0.8, -- Default line height for the screenshot
     fonts = {
       default = {
         name = "FiraCode Nerd Font", -- Default font name for the screenshot
@@ -26,6 +31,10 @@ M.defaults = {
         -- so you can view it correctly in E-mails or browsers
       },
       italic = {
+        name = "FiraCode Nerd Font",
+        file = nil,
+      },
+      bold = {
         name = "FiraCode Nerd Font",
         file = nil,
       },
