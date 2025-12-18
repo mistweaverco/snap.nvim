@@ -146,6 +146,12 @@ local function binary_exists()
   return false
 end
 
+---Get the required backend version tag (without "v" prefix)
+---@return string version_tag Version tag like "1.0.0"
+local function get_required_version()
+  return Globals.BACKEND_VERSION
+end
+
 ---Get the required backend version tag (with "v" prefix for GitHub releases)
 ---@return string version_tag Version tag like "v1.0.0"
 local function get_required_version_tag()
@@ -159,7 +165,7 @@ local function version_matches()
   if not installed then
     return false
   end
-  local required = get_required_version_tag()
+  local required = get_required_version()
   return installed == required
 end
 
@@ -173,7 +179,8 @@ M.ensure_installed = function(debug)
     return
   end
 
-  local required_version = get_required_version_tag()
+  local required_version = get_required_version()
+  local required_version_tag = get_required_version_tag()
 
   -- Check if binary exists and version matches
   if binary_exists() and version_matches() then
@@ -196,7 +203,7 @@ M.ensure_installed = function(debug)
   local release_bin_name = "snap-nvim-" .. plat .. ext
   local url = string.format(
     "https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s",
-    required_version,
+    required_version_tag,
     release_bin_name
   )
 
@@ -224,13 +231,16 @@ M.install = function(version, sync)
   -- Binary name format: snap-nvim-{platform}{ext}
   -- e.g., snap-nvim-linux-x86_64, snap-nvim-windows-x86_64.exe
   local release_bin_name = "snap-nvim-" .. plat .. ext
+  local version_tag = version:match("^v") and version ~= "latest" and version or "v" .. version
+  version = version:match("^v") and version:sub(2) or version
 
   -- Handle "latest" specially - use the /latest/download/ URL redirect
   local url
   if version == "latest" then
     url = string.format("https://github.com/mistweaverco/snap.nvim/releases/latest/download/%s", release_bin_name)
   else
-    url = string.format("https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s", version, release_bin_name)
+    url =
+      string.format("https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s", version_tag, release_bin_name)
   end
 
   local bin_dir = M.get_bin_dir()
