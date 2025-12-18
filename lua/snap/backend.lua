@@ -1,4 +1,8 @@
+local Logger = require("snap.logger")
+local Config = require("snap.config")
 local M = {}
+
+local DOWNLOAD_BASE_URL = "https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s"
 
 local Globals = require("snap.globals")
 
@@ -91,7 +95,7 @@ end
 ---@param output_path string Path to save the file to
 ---@param callback function|nil Optional callback to run after download completes
 local function download_file_async(url, output_path, callback)
-  local cmd = { "curl", "-fL", "-o", output_path, url }
+  local cmd = { "curl", "-sfL", "-o", output_path, url }
   vim.system(
     cmd,
     {
@@ -102,36 +106,20 @@ local function download_file_async(url, output_path, callback)
     },
     vim.schedule_wrap(function(result)
       if result.stderr and result.stderr ~= "" then
-        vim.notify("Error downloading snap.nvim backend: " .. vim.inspect(result.stderr), vim.log.levels.ERROR)
+        Logger.error("Error downloading snap.nvim backend: ", vim.inspect(result.stderr))
         return
       end
       if result.code ~= 0 then
-        vim.notify("Download failed with exit code: " .. tostring(result.code), vim.log.levels.ERROR)
+        Logger.error("Download failed with exit code: " .. tostring(result.code))
         return
       end
       make_executable(output_path)
-      vim.notify("Snap.nvim backend installed to " .. output_path, vim.log.levels.INFO)
+      Logger.notify("Snap.nvim backend downloaded successfully!", Logger.LoggerLogLevels.info)
       if callback then
         callback()
       end
     end)
   )
-end
-
----Download a file synchronously (blocking)
----@param url string URL to download from
----@param output_path string Path to save the file to
----@return boolean success Whether the download succeeded
-local function download_file_sync(url, output_path)
-  local cmd = { "curl", "-fL", "-o", output_path, "--silent", "--show-error", url }
-  local result = vim.fn.system(cmd)
-  local exit_code = vim.v.shell_error
-  if exit_code ~= 0 then
-    vim.notify("Failed to download snap.nvim backend: " .. result, vim.log.levels.ERROR)
-    return false
-  end
-  make_executable(output_path)
-  return true
 end
 
 ---Check if binary exists
@@ -169,62 +157,10 @@ local function version_matches()
   return installed == required
 end
 
----Ensure the backend binary is installed and up-to-date
----If debug mode is enabled, skip the check (assumes running from source)
----If binary is not found or version doesn't match, download the required version
----@param debug table|nil Debug configuration (if set, skip auto-install)
-M.ensure_installed = function(debug)
-  -- In debug mode, we run from source, so skip binary check
-  if debug ~= nil then
-    return
-  end
-
-  local required_version = get_required_version()
-  local required_version_tag = get_required_version_tag()
-
-  -- Check if binary exists and version matches
-  if binary_exists() and version_matches() then
-    return
-  end
-
-  -- Determine reason for download
-  local reason
-  if not binary_exists() then
-    reason = "Backend not found"
-  else
-    local installed = M.get_installed_version() or "unknown"
-    reason = string.format("Version mismatch (installed: %s, required: %s)", installed, required_version)
-  end
-
-  vim.notify(string.format("Snap.nvim: %s. Downloading %s...", reason, required_version), vim.log.levels.INFO)
-
-  local plat = platform()
-  local ext = IS_WINDOWS and ".exe" or ""
-  local release_bin_name = "snap-nvim-" .. plat .. ext
-  local url = string.format(
-    "https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s",
-    required_version_tag,
-    release_bin_name
-  )
-
-  local bin_dir = M.get_bin_dir()
-  vim.fn.mkdir(bin_dir, "p")
-
-  local bin_name = M.get_bin_name()
-  local bin_path = join_paths(bin_dir, bin_name)
-
-  -- Use synchronous download for ensure_installed so the binary is ready immediately
-  local success = download_file_sync(url, bin_path)
-  if success then
-    set_installed_version(required_version)
-    vim.notify(string.format("Snap.nvim backend %s installed successfully!", required_version), vim.log.levels.INFO)
-  end
-end
-
 ---Manually install the backend binary
 ---@param version string|nil Version tag to install (e.g., "v1.0.0"), defaults to "latest"
----@param sync boolean|nil If true, download synchronously (blocking)
-M.install = function(version, sync)
+---@param callback function|nil Optional callback to run after installation
+M.install = function(version, callback)
   version = version or "latest"
   local plat = platform()
   local ext = IS_WINDOWS and ".exe" or ""
@@ -237,10 +173,9 @@ M.install = function(version, sync)
   -- Handle "latest" specially - use the /latest/download/ URL redirect
   local url
   if version == "latest" then
-    url = string.format("https://github.com/mistweaverco/snap.nvim/releases/latest/download/%s", release_bin_name)
+    url = string.format(DOWNLOAD_BASE_URL, "latest", release_bin_name)
   else
-    url =
-      string.format("https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s", version_tag, release_bin_name)
+    url = string.format(DOWNLOAD_BASE_URL, version_tag, release_bin_name)
   end
 
   local bin_dir = M.get_bin_dir()
@@ -249,19 +184,50 @@ M.install = function(version, sync)
   local bin_name = M.get_bin_name()
   local bin_path = join_paths(bin_dir, bin_name)
 
-  if sync then
-    vim.notify("Downloading snap.nvim backend...", vim.log.levels.INFO)
-    local success = download_file_sync(url, bin_path)
-    if success then
-      set_installed_version(version)
-      vim.notify("Snap.nvim backend installed successfully!", vim.log.levels.INFO)
+  download_file_async(url, bin_path, function()
+    set_installed_version(version)
+    if callback then
+      callback()
     end
-  else
-    vim.notify("Downloading snap.nvim backend...", vim.log.levels.INFO)
-    download_file_async(url, bin_path, function()
-      set_installed_version(version)
-    end)
+  end)
+end
+
+---Ensure the backend binary is installed and up-to-date
+---If debug mode is enabled, skip the check (assumes running from source)
+---If binary is not found or version doesn't match, download the required version
+---@param callback function|nil Optional callback to run after installation
+M.ensure_installed = function(callback)
+  local user_config = Config.get()
+  -- Debug mode and a backend specified - skip installation
+  if user_config.debug ~= nil and user_config.debug.backend ~= nil then
+    if callback then
+      callback()
+    end
+    return
   end
+
+  local required_version = get_required_version()
+  local required_version_tag = get_required_version_tag()
+
+  -- Check if binary exists and version matches
+  if binary_exists() and version_matches() then
+    if callback then
+      callback()
+    end
+    return
+  end
+
+  -- Determine reason for download
+  local reason
+  if not binary_exists() then
+    reason = "Backend not found"
+  else
+    local installed = M.get_installed_version() or "unknown"
+    reason = string.format("Version mismatch (installed: %s, required: %s)", installed, required_version)
+  end
+
+  Logger.notify(string.format("%s. Downloading %s...", reason, required_version), Logger.LoggerLogLevels.info)
+  M.install(required_version_tag, callback)
 end
 
 return M

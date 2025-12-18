@@ -163,9 +163,10 @@ Directory to save screenshots.
 
 ### Configure `filename_pattern`
 
-Optional. Defaults to `snap.nvim_%t.png`.
+Optional. Defaults to `snap.nvim_%t`.
 
-Filename pattern for the screenshot files.
+Filename pattern for the generated files.
+File extension will be added automatically based on the output format.
 
 Supports the following placeholders:
 
@@ -226,7 +227,7 @@ by running `bun install` in the plugin directory.
       website = "https://yourwebsite.com",
     },
     output_dir = "$HOME/Pictures/Screenshots", -- Directory to save screenshots
-    filename_pattern = "snap.nvim_%t.png", -- e.g., "snap.nvim_%t.png" (supports %t for timestamp)
+    filename_pattern = "snap.nvim_%t", -- e.g., "snap.nvim_%t" (supports %t for timestamp)
     copy_to_clipboard = {
         image = true, -- Whether to copy the image to clipboard
         html = true, -- Whether to copy the HTML to clipboard
