@@ -149,7 +149,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -d "dist" ] && [ "$(ls -A dist 2>/dev/null)" ]; then
+          # check if dist directory has any files, non-hidden files
+          if [ -d "dist" ] && [ "$(ls dist)" ]; then
             echo "Creating release with binaries"
             gh release create "$GITHUB_REF_NAME" \
               --generate-notes \
