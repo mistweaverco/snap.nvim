@@ -197,8 +197,9 @@ end
 ---If binary is not found or version doesn't match, download the required version
 ---@param callback function|nil Optional callback to run after installation
 M.ensure_installed = function(callback)
-  local conf = Config.get()
-  if conf.debug ~= nil and conf.debug.backend == nil then
+  local user_config = Config.get()
+  -- Debug mode and a backend specified - skip installation
+  if user_config.debug ~= nil and user_config.debug.backend ~= nil then
     if callback then
       callback()
     end
@@ -210,6 +211,9 @@ M.ensure_installed = function(callback)
 
   -- Check if binary exists and version matches
   if binary_exists() and version_matches() then
+    if callback then
+      callback()
+    end
     return
   end
 

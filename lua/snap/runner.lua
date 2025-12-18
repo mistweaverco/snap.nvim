@@ -676,9 +676,10 @@ end
 ---@param opts SnapExportOptions|nil Export options
 M.image_to_clipboard = function(opts)
   opts = opts or {}
-  local conf = Config.get()
+  local user_config = Config.get()
   local save_path = M.get_default_save_path()
-  local filename = conf.filename_pattern and conf.filename_pattern:gsub("%%t", os.date("%Y%m%d_%H%M%S")) or nil
+  local filename = user_config.filename_pattern and user_config.filename_pattern:gsub("%%t", os.date("%Y%m%d_%H%M%S"))
+    or nil
   local jsonPayload = vim.fn.json_encode(export_buf_to_html({
     filepath = save_path and filename and (save_path .. "/" .. filename) or nil,
     range = opts.range,
@@ -688,15 +689,15 @@ M.image_to_clipboard = function(opts)
 
   local cwd = nil
 
-  if conf.debug ~= nil and conf.debug.backend ~= nil then
-    cwd = get_absolute_plugin_path("backend", conf.debug.backend)
+  if user_config.debug ~= nil and user_config.debug.backend ~= nil then
+    cwd = get_absolute_plugin_path("backend", user_config.debug.backend)
     if not vim.fn.isdirectory(cwd) then
       error("Backend directory not found: " .. cwd)
     end
     -- Try to find backend bin in PATH
-    local backend_bin_path = vim.fn.exepath(conf.debug.backend)
+    local backend_bin_path = vim.fn.exepath(user_config.debug.backend)
     if backend_bin_path == "" then
-      error(conf.debug.backend .. " executable not found in PATH")
+      error(user_config.debug.backend .. " executable not found in PATH")
     else
       system_args = { backend_bin_path, "run", "." }
     end
@@ -707,7 +708,7 @@ M.image_to_clipboard = function(opts)
   local system_obj = vim.system(
     system_args,
     {
-      timeout = conf.timeout,
+      timeout = user_config.timeout,
       stdin = true,
       cwd = cwd,
       env = vim.fn.environ(),
