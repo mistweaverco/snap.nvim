@@ -688,7 +688,7 @@ M.image_to_clipboard = function(opts)
 
   local cwd = nil
 
-  if conf.debug ~= nil then
+  if conf.debug ~= nil and conf.debug.backend ~= nil then
     cwd = get_absolute_plugin_path("backend", conf.debug.backend)
     if not vim.fn.isdirectory(cwd) then
       error("Backend directory not found: " .. cwd)
