@@ -45,12 +45,14 @@ const main = async () => {
   let json: JSONObjectImageSuccessRequest | JSONObjectHTMLSuccessRequest;
 
   let buffer: NodeHTMLToImageBuffer;
-  const code = jsonPayload.data.code.map((line) => {
-    if (line.trim() === "") {
-      return `<div class="snap-code-line">&nbsp;</div>`;
-    }
-    return `<div class="snap-code-line">${line}</div>`;
-  }).join("\n");
+  const code = jsonPayload.data.code
+    .map((line) => {
+      if (line.trim() === "") {
+        return `<div class="snap-code-line">&nbsp;</div>`;
+      }
+      return `<div class="snap-code-line">${line}</div>`;
+    })
+    .join("\n");
 
   switch (jsonPayload.data.type) {
     case JSONRequestType.CodeImageGeneration:

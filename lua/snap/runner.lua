@@ -509,6 +509,7 @@ local function export_buf_to_html(opts)
         bgColor = DEFAULT_BG,
         fgColor = DEFAULT_FG,
       },
+      toClipboard = true,
       filepath = filepath,
       fontSettings = user_config.font_settings or Config.defaults.font_settings,
       outputImageFormat = types.SnapImageOutputFormat.png,
