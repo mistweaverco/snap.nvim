@@ -3,3 +3,5 @@ extends: default
 rules:
   truthy:
     check-keys: false
+  line-length:
+    ignore-long-lines: true

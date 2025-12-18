@@ -21,7 +21,6 @@ do_gh_release() {
 }
 
 boot() {
-  set_version
   check_git_dirty
   do_gh_release
 }

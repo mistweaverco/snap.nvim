@@ -7,9 +7,50 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
+  check-backend-changes:
+    name: Check if backend needs rebuild
+    runs-on: ubuntu-latest
+    outputs:
+      needs-build: ${{ steps.check.outputs.needs-build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for backend changes
+        id: check
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+
+          # Get all tags sorted by version (descending), find current tag position, get previous one
+          ALL_TAGS=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$')
+          PREVIOUS_TAG=$(echo "$ALL_TAGS" | grep -A1 "^$CURRENT_TAG$" | tail -n1 | grep -v "^$CURRENT_TAG$" || echo "")
+
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # First tag or couldn't find previous tag, always build
+            echo "No previous tag found (first tag?), building binaries"
+            echo "needs-build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Comparing $PREVIOUS_TAG..$CURRENT_TAG for backend changes"
+
+          # Check if backend version file changed
+          if git diff --name-only "$PREVIOUS_TAG" "$CURRENT_TAG" -- "lua/snap/globals/versions/backend_version.lua" | grep -q "."; then
+            echo "Backend version file changed, building binaries"
+            echo "needs-build=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "No backend version bump detected, skipping binary build"
+          echo "needs-build=false" >> $GITHUB_OUTPUT
+
   build:
     name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
+    needs: check-backend-changes
+    if: needs.check-backend-changes.outputs.needs-build == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -82,7 +123,8 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [check-backend-changes, build]
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped')
     permissions:
       contents: write
     steps:
@@ -96,9 +138,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-
-      - name: List artifacts
-        run: ls -la dist/
+          if-no-files-found: ignore
 
       - name: Set version
         run: |
@@ -109,6 +149,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --generate-notes \
-            dist/snap-nvim-*
+          if [ -d "dist" ] && [ "$(ls -A dist 2>/dev/null)" ]; then
+            echo "Creating release with binaries"
+            gh release create "$GITHUB_REF_NAME" \
+              --generate-notes \
+              dist/snap-nvim-*
+          else
+            echo "No binaries to upload, creating release without binaries"
+            gh release create "$GITHUB_REF_NAME" --generate-notes
+          fi
