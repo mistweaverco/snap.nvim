@@ -1,6 +1,8 @@
+local plugin_version = require("snap.globals.versions.plugin")
+local backend_version = require("snap.globals.versions.backend")
 local M = {}
 
-M.VERSION = "1.0.2"
-M.BACKEND_VERSION = "1.0.2"
+M.VERSION = plugin_version
+M.BACKEND_VERSION = backend_version
 
 return M
