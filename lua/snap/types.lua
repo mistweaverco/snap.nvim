@@ -1,5 +1,11 @@
 local M = {}
 
+---@enum SnapConfigNotifyProvider
+M.SnapConfigTemplate = {
+  notify = "notify",
+  print = "print",
+}
+
 ---@enum SnapConfigTemplate
 M.SnapConfigTemplate = {
   default = "default",
@@ -29,6 +35,11 @@ M.SnapConfigFontSettingsFont = {
   bold = "bold",
   bold_italic = "bold_italic",
 }
+
+---Visual range for taking a screenshot
+---@class SnapConfigNotify
+---@field enabled boolean Whether to show notifications
+---@field provider SnapConfigNotifyProvider Notification provider: "notify", "print"
 
 ---Visual range for taking a screenshot
 ---@class SnapVisualRange
@@ -64,6 +75,7 @@ M.SnapConfigFontSettingsFont = {
 ---@field timeout number|nil Timeout for screenshot operations in milliseconds
 ---@field filename_pattern string|nil Screenshot filename pattern (supports %t for timestamp)
 ---@field copy_to_clipboard SnapConfigCopyToClipboard|nil Copy to clipboard settings
+---@field notify SnapConfigNotify|nil Notification settings
 ---@field font_settings SnapConfigFontSettings|nil Font settings for the screenshot
 
 ---@class SnapPayloadDataTheme theme colors for the screenshot
@@ -128,5 +140,6 @@ M.SnapConfigFontSettingsFont = {
 ---@field template SnapConfigTemplate Built-in template name or "default"
 ---@field filename_pattern string Screenshot filename pattern (supports %t for timestamp)
 ---@field copy_to_clipboard SnapConfigCopyToClipboard Copy to clipboard settings
+---@field notify SnapConfigNotify
 ---@field font_settings SnapConfigFontSettings Font settings for the screenshot
 return M

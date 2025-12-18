@@ -1,4 +1,6 @@
 local M = {}
+local Types = require("snap.types")
+local Logger = require("snap.logger")
 local Config = require("snap.config")
 local Runner = require("snap.runner")
 local Backend = require("snap.backend")
@@ -23,12 +25,19 @@ M.setup = function(config)
       }
     end
 
+    local type = opts.args ~= "" and opts.args or Types.SnapPayloadType.image
+    if Types.SnapPayloadType[type] == nil then
+      Logger.error("Invalid payload type: " .. type, "Valid types are:", Types.SnapPayloadType)
+      return
+    end
+
     Runner.run({
+      type = type,
       range = range,
     })
   end, {
     desc = "Take a screenshot of the current file or visual selection",
-    nargs = 0,
+    nargs = "?",
     range = true,
   })
 end

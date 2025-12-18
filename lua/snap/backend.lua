@@ -1,4 +1,8 @@
+local Logger = require("snap.logger")
+local Config = require("snap.config")
 local M = {}
+
+local DOWNLOAD_BASE_URL = "https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s"
 
 local Globals = require("snap.globals")
 
@@ -102,15 +106,18 @@ local function download_file_async(url, output_path, callback)
     },
     vim.schedule_wrap(function(result)
       if result.stderr and result.stderr ~= "" then
-        vim.notify("Error downloading snap.nvim backend: " .. vim.inspect(result.stderr), vim.log.levels.ERROR)
+        Logger.notify(
+          "Error downloading snap.nvim backend: " .. vim.inspect(result.stderr),
+          Logger.LoggerLogLevels.error
+        )
         return
       end
       if result.code ~= 0 then
-        vim.notify("Download failed with exit code: " .. tostring(result.code), vim.log.levels.ERROR)
+        Logger.notify("Download failed with exit code: " .. tostring(result.code), Logger.LoggerLogLevels.error)
         return
       end
       make_executable(output_path)
-      vim.notify("Snap.nvim backend installed to " .. output_path, vim.log.levels.INFO)
+      Logger.notify("Snap.nvim backend downloaded successfully!", Logger.LoggerLogLevels.info)
       if callback then
         callback()
       end
@@ -169,13 +176,51 @@ local function version_matches()
   return installed == required
 end
 
+---Manually install the backend binary
+---@param version string|nil Version tag to install (e.g., "v1.0.0"), defaults to "latest"
+---@param callback function|nil Optional callback to run after installation
+M.install = function(version, callback)
+  version = version or "latest"
+  local plat = platform()
+  local ext = IS_WINDOWS and ".exe" or ""
+  -- Binary name format: snap-nvim-{platform}{ext}
+  -- e.g., snap-nvim-linux-x86_64, snap-nvim-windows-x86_64.exe
+  local release_bin_name = "snap-nvim-" .. plat .. ext
+  local version_tag = version:match("^v") and version ~= "latest" and version or "v" .. version
+  version = version:match("^v") and version:sub(2) or version
+
+  -- Handle "latest" specially - use the /latest/download/ URL redirect
+  local url
+  if version == "latest" then
+    url = string.format(DOWNLOAD_BASE_URL, "latest", release_bin_name)
+  else
+    url = string.format(DOWNLOAD_BASE_URL, version_tag, release_bin_name)
+  end
+
+  local bin_dir = M.get_bin_dir()
+  vim.fn.mkdir(bin_dir, "p")
+
+  local bin_name = M.get_bin_name()
+  local bin_path = join_paths(bin_dir, bin_name)
+
+  download_file_async(url, bin_path, function()
+    set_installed_version(version)
+    if callback then
+      callback()
+    end
+  end)
+end
+
 ---Ensure the backend binary is installed and up-to-date
 ---If debug mode is enabled, skip the check (assumes running from source)
 ---If binary is not found or version doesn't match, download the required version
----@param debug table|nil Debug configuration (if set, skip auto-install)
-M.ensure_installed = function(debug)
-  -- In debug mode, we run from source, so skip binary check
-  if debug ~= nil then
+---@param callback function|nil Optional callback to run after installation
+M.ensure_installed = function(callback)
+  local conf = Config.get()
+  if conf.debug ~= nil and conf.debug.backend ~= nil then
+    if callback then
+      callback()
+    end
     return
   end
 
@@ -196,72 +241,8 @@ M.ensure_installed = function(debug)
     reason = string.format("Version mismatch (installed: %s, required: %s)", installed, required_version)
   end
 
-  vim.notify(string.format("Snap.nvim: %s. Downloading %s...", reason, required_version), vim.log.levels.INFO)
-
-  local plat = platform()
-  local ext = IS_WINDOWS and ".exe" or ""
-  local release_bin_name = "snap-nvim-" .. plat .. ext
-  local url = string.format(
-    "https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s",
-    required_version_tag,
-    release_bin_name
-  )
-
-  local bin_dir = M.get_bin_dir()
-  vim.fn.mkdir(bin_dir, "p")
-
-  local bin_name = M.get_bin_name()
-  local bin_path = join_paths(bin_dir, bin_name)
-
-  -- Use synchronous download for ensure_installed so the binary is ready immediately
-  local success = download_file_sync(url, bin_path)
-  if success then
-    set_installed_version(required_version)
-    vim.notify(string.format("Snap.nvim backend %s installed successfully!", required_version), vim.log.levels.INFO)
-  end
-end
-
----Manually install the backend binary
----@param version string|nil Version tag to install (e.g., "v1.0.0"), defaults to "latest"
----@param sync boolean|nil If true, download synchronously (blocking)
-M.install = function(version, sync)
-  version = version or "latest"
-  local plat = platform()
-  local ext = IS_WINDOWS and ".exe" or ""
-  -- Binary name format: snap-nvim-{platform}{ext}
-  -- e.g., snap-nvim-linux-x86_64, snap-nvim-windows-x86_64.exe
-  local release_bin_name = "snap-nvim-" .. plat .. ext
-  local version_tag = version:match("^v") and version ~= "latest" and version or "v" .. version
-  version = version:match("^v") and version:sub(2) or version
-
-  -- Handle "latest" specially - use the /latest/download/ URL redirect
-  local url
-  if version == "latest" then
-    url = string.format("https://github.com/mistweaverco/snap.nvim/releases/latest/download/%s", release_bin_name)
-  else
-    url =
-      string.format("https://github.com/mistweaverco/snap.nvim/releases/download/%s/%s", version_tag, release_bin_name)
-  end
-
-  local bin_dir = M.get_bin_dir()
-  vim.fn.mkdir(bin_dir, "p")
-
-  local bin_name = M.get_bin_name()
-  local bin_path = join_paths(bin_dir, bin_name)
-
-  if sync then
-    vim.notify("Downloading snap.nvim backend...", vim.log.levels.INFO)
-    local success = download_file_sync(url, bin_path)
-    if success then
-      set_installed_version(version)
-      vim.notify("Snap.nvim backend installed successfully!", vim.log.levels.INFO)
-    end
-  else
-    vim.notify("Downloading snap.nvim backend...", vim.log.levels.INFO)
-    download_file_async(url, bin_path, function()
-      set_installed_version(version)
-    end)
-  end
+  Logger.notify(string.format("%s. Downloading %s...", reason, required_version), Logger.LoggerLogLevels.info)
+  M.install(required_version_tag, callback)
 end
 
 return M

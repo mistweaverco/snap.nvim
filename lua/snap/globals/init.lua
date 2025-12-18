@@ -4,5 +4,6 @@ local M = {}
 
 M.VERSION = plugin_version
 M.BACKEND_VERSION = backend_version
+M.NAME = "snap.nvim"
 
 return M

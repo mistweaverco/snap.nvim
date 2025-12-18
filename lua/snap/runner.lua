@@ -594,7 +594,6 @@ end
 ---@param opts SnapExportOptions|nil Export options
 M.html_to_clipboard = function(opts)
   opts = opts or {}
-  Backend.ensure_installed(Config.get().debug)
   local jsonPayload = vim.fn.json_encode(export_buf_to_html({
     range = opts.range,
     type = types.SnapPayloadType.html,
@@ -674,15 +673,15 @@ M.get_default_save_path = function()
 end
 
 ---Export current buffer to HTML using backend
----@param range SnapVisualRange|nil Visual range (optional)
-M.image_to_clipboard = function(range)
-  Backend.ensure_installed(Config.get().debug)
+---@param opts SnapExportOptions|nil Export options
+M.image_to_clipboard = function(opts)
+  opts = opts or {}
   local conf = Config.get()
   local save_path = M.get_default_save_path()
   local filename = conf.filename_pattern and conf.filename_pattern:gsub("%%t", os.date("%Y%m%d_%H%M%S")) or nil
   local jsonPayload = vim.fn.json_encode(export_buf_to_html({
     filepath = save_path and filename and (save_path .. "/" .. filename) or nil,
-    range = range,
+    range = opts.range,
     type = types.SnapPayloadType.image,
   }))
   local system_args = nil
@@ -743,25 +742,25 @@ M.image_to_clipboard = function(range)
 end
 
 ---Run the screenshot process
----@param range SnapRunOptions|nil Options for running the screenshot
+---@param opts SnapRunOptions|nil Options for running the screenshot
 M.run = function(opts)
   opts = opts or {}
-  local range = opts.range
-  local type = opts.type or types.SnapPayloadType.image
-  -- If range is provided from command (visual mode), use it
-  if range then
-    if type == types.SnapPayloadType.image then
-      M.image_to_clipboard(range)
-    else
-      M.html_to_clipboard(range)
+  Backend.ensure_installed(function()
+    -- If range is provided from command (visual mode), use it
+    if opts.range then
+      if opts.type == types.SnapPayloadType.image then
+        M.image_to_clipboard({ range = opts.range })
+      else
+        M.html_to_clipboard({ range = opts.range })
+      end
+      return
     end
-    return
-  end
-  if type == types.SnapPayloadType.image then
-    M.image_to_clipboard()
-  else
-    M.html_to_clipboard()
-  end
+    if opts.type == types.SnapPayloadType.image then
+      M.image_to_clipboard()
+    else
+      M.html_to_clipboard()
+    end
+  end)
 end
 
 return M

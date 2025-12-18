@@ -19,6 +19,10 @@ M.defaults = {
     image = true, -- Whether to copy the image to clipboard
     html = true, -- Whether to copy the HTML to clipboard
   },
+  notify = {
+    enabled = true, -- Whether to show notifications
+    provider = "notify", -- Notification provider: "notify", "print"
+  },
   font_settings = {
     size = 14, -- Default font size for the screenshot
     line_height = 0.8, -- Default line height for the screenshot
