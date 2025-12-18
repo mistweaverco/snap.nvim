@@ -95,7 +95,7 @@ end
 ---@param output_path string Path to save the file to
 ---@param callback function|nil Optional callback to run after download completes
 local function download_file_async(url, output_path, callback)
-  local cmd = { "curl", "-fL", "-o", output_path, url }
+  local cmd = { "curl", "-sfL", "-o", output_path, url }
   vim.system(
     cmd,
     {
@@ -106,14 +106,11 @@ local function download_file_async(url, output_path, callback)
     },
     vim.schedule_wrap(function(result)
       if result.stderr and result.stderr ~= "" then
-        Logger.notify(
-          "Error downloading snap.nvim backend: " .. vim.inspect(result.stderr),
-          Logger.LoggerLogLevels.error
-        )
+        Logger.error("Error downloading snap.nvim backend: ", vim.inspect(result.stderr))
         return
       end
       if result.code ~= 0 then
-        Logger.notify("Download failed with exit code: " .. tostring(result.code), Logger.LoggerLogLevels.error)
+        Logger.error("Download failed with exit code: " .. tostring(result.code))
         return
       end
       make_executable(output_path)
@@ -123,22 +120,6 @@ local function download_file_async(url, output_path, callback)
       end
     end)
   )
-end
-
----Download a file synchronously (blocking)
----@param url string URL to download from
----@param output_path string Path to save the file to
----@return boolean success Whether the download succeeded
-local function download_file_sync(url, output_path)
-  local cmd = { "curl", "-fL", "-o", output_path, "--silent", "--show-error", url }
-  local result = vim.fn.system(cmd)
-  local exit_code = vim.v.shell_error
-  if exit_code ~= 0 then
-    vim.notify("Failed to download snap.nvim backend: " .. result, vim.log.levels.ERROR)
-    return false
-  end
-  make_executable(output_path)
-  return true
 end
 
 ---Check if binary exists
@@ -217,7 +198,7 @@ end
 ---@param callback function|nil Optional callback to run after installation
 M.ensure_installed = function(callback)
   local conf = Config.get()
-  if conf.debug ~= nil and conf.debug.backend ~= nil then
+  if conf.debug ~= nil and conf.debug.backend == nil then
     if callback then
       callback()
     end
