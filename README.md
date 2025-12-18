@@ -179,6 +179,19 @@ Template to use for rendering screenshots.
 
 Currently, only the `default` template is supported.
 
+### Configure `copy_to_clipboard`
+
+Optional. Defaults to:
+
+```lua
+{
+  image = true,
+  html = true,
+}
+```
+
+Configure whether to copy the output to the clipboard.
+
 ### Configure `debug`
 
 Optional. Defaults to `nil`.
@@ -214,6 +227,10 @@ by running `bun install` in the plugin directory.
     },
     output_dir = "$HOME/Pictures/Screenshots", -- Directory to save screenshots
     filename_pattern = "snap.nvim_%t.png", -- e.g., "snap.nvim_%t.png" (supports %t for timestamp)
+    copy_to_clipboard = {
+        image = true, -- Whether to copy the image to clipboard
+        html = true, -- Whether to copy the HTML to clipboard
+    },
     font_settings = {
       size = 14,         -- Default font size for the screenshot
       line_height = 0.8, -- Default line height for the screenshot
