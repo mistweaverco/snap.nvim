@@ -334,12 +334,21 @@ local function extract_treesitter_hl(info)
     -- Get the last (highest priority) treesitter capture
     -- In Neovim, Treesitter arrays are ordered by priority with lowest priority value first
     -- This is in contrast to the LSP semantic tokens where usually lower index = higher priority
-    local capture = info.treesitter[#info.treesitter]
+    --- But we need to merge from lowest priority to highest, so we take the last one
+    --- and get all styling applied
+    local captures = info.treesitter
+    local merged_hl = {}
+    for i = #captures, 1, -1 do
+      local capture = captures[i]
+      if capture.hl_group or capture.capture then
+        merged_hl = vim.tbl_extend("force", merged_hl, capture)
+      end
+    end
     -- Use hl_group which includes the language suffix (e.g., "@variable.lua")
-    if capture.hl_group then
-      return capture.hl_group
-    elseif capture.capture then
-      return capture.capture
+    if merged_hl.hl_group then
+      return merged_hl.hl_group
+    elseif merged_hl.capture then
+      return merged_hl.capture
     end
   end
   return nil
