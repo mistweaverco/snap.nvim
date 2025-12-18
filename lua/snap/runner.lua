@@ -331,9 +331,10 @@ end
 ---@return string|nil Highlight group name or nil
 local function extract_treesitter_hl(info)
   if info and info.treesitter and #info.treesitter > 0 then
-    -- Get the first (highest priority) treesitter capture
-    -- In Neovim, arrays are ordered by priority with lowest priority value first
-    local capture = info.treesitter[1]
+    -- Get the last (highest priority) treesitter capture
+    -- In Neovim, Treesitter arrays are ordered by priority with lowest priority value first
+    -- This is in contrast to the LSP semantic tokens where usually lower index = higher priority
+    local capture = info.treesitter[#info.treesitter]
     -- Use hl_group which includes the language suffix (e.g., "@variable.lua")
     if capture.hl_group then
       return capture.hl_group
