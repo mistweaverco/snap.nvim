@@ -42,7 +42,6 @@ list_supported_backends() {
 
 BUILD_TARGET=""
 BIN_EXT=""
-PLATFORM_CI_AGNOSTIC_NAME=""
 BACKEND_ICON=""
 PLATFORM_ICON=""
 
