@@ -280,6 +280,7 @@ end
 ---Extract semantic token highlight from vim.inspect_pos result
 ---Semantic tokens can be in extmarks (with ns matching "semantic_tokens") or in semantic_tokens field
 ---Returns the highest priority semantic token highlight
+---Note: In Neovim, lower priority values have higher precedence (priority 0 > priority 100)
 ---@param info table Result from vim.inspect_pos
 ---@return string|nil Highlight group name or nil
 local function extract_semantic_hl(info)
@@ -288,7 +289,7 @@ local function extract_semantic_hl(info)
   end
 
   local best_hl = nil
-  local best_priority = -1
+  local best_priority = math.huge
 
   -- Check extmarks for semantic tokens (namespace contains "semantic_tokens")
   if info.extmarks then
@@ -298,7 +299,8 @@ local function extract_semantic_hl(info)
         local hl = extmark.opts and extmark.opts.hl_group
         local priority = (extmark.opts and extmark.opts.priority) or 0
 
-        if hl and priority > best_priority then
+        -- Lower priority values have higher precedence in Neovim
+        if hl and priority < best_priority then
           best_hl = hl
           best_priority = priority
         end
@@ -312,7 +314,8 @@ local function extract_semantic_hl(info)
       local hl = token.hl_group or (token.opts and token.opts.hl_group)
       local priority = token.priority or (token.opts and token.opts.priority) or 0
 
-      if hl and priority > best_priority then
+      -- Lower priority values have higher precedence in Neovim
+      if hl and priority < best_priority then
         best_hl = hl
         best_priority = priority
       end
@@ -323,12 +326,14 @@ local function extract_semantic_hl(info)
 end
 
 ---Extract treesitter capture from vim.inspect_pos result
+---Note: The first element has the highest priority (lowest priority value)
 ---@param info table Result from vim.inspect_pos
 ---@return string|nil Highlight group name or nil
 local function extract_treesitter_hl(info)
   if info and info.treesitter and #info.treesitter > 0 then
-    -- Get the last (most specific) treesitter capture
-    local capture = info.treesitter[#info.treesitter]
+    -- Get the first (highest priority) treesitter capture
+    -- In Neovim, arrays are ordered by priority with lowest priority value first
+    local capture = info.treesitter[1]
     -- Use hl_group which includes the language suffix (e.g., "@variable.lua")
     if capture.hl_group then
       return capture.hl_group
