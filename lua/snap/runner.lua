@@ -334,70 +334,98 @@ local function extract_treesitter_hl(info)
     -- Get the last (highest priority) treesitter capture
     -- In Neovim, Treesitter arrays are ordered by priority with lowest priority value first
     -- This is in contrast to the LSP semantic tokens where usually lower index = higher priority
-    --- But we need to merge from lowest priority to highest, so we take the last one
-    --- and get all styling applied
     local captures = info.treesitter
-    local merged_hl = {}
-    for i = #captures, 1, -1 do
-      local capture = captures[i]
-      if capture.hl_group or capture.capture then
-        merged_hl = vim.tbl_extend("force", merged_hl, capture)
-      end
-    end
-    -- Use hl_group which includes the language suffix (e.g., "@variable.lua")
-    if merged_hl.hl_group then
-      return merged_hl.hl_group
-    elseif merged_hl.capture then
-      return merged_hl.capture
+    local hl_group = captures[#captures].hl_group
+    if hl_group then
+      return hl_group
     end
   end
   return nil
 end
 
+---Scroll view to specific position temporarily
+---@param row number Line number (0-based)
+---@param col number Column number (0-based)
+---@return nil
+local scroll_into_view = function(row, col)
+  local nvim_cursor = vim.api.nvim_win_get_cursor(0)
+  local win = vim.api.nvim_get_current_win()
+  local height = vim.api.nvim_win_get_height(win)
+  -- check if already in view via cursor position,
+  -- if in view, no need to scroll
+  if row >= (nvim_cursor[1] - 1) and row < (nvim_cursor[1] - 1 + height) then
+    return
+  end
+  -- scroll so that row is the top most line
+  vim.api.nvim_win_set_cursor(win, { row + 1, col })
+  vim.cmd("redraw")
+end
+
+---Scroll back if at last row of the view
+---@param row number Line number (0-based)
+---@param view vim.fn.winsaveview.ret View state to restore later
+local restore_view = function(row, view)
+  local win = vim.api.nvim_get_current_win()
+  local rows = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(win))
+  if row >= (rows - 1) then
+    vim.fn.winrestview(view)
+  end
+end
+
 ---Get highlight group at specific position using vim.inspect_pos
----This reliably gets all highlights including semantic tokens, treesitter, and syntax
----Priority: semantic_tokens > treesitter > syntax > extmarks
+---This reliably gets all highlights including extmarks, semantic tokens, treesitter, and syntax
+---Priority: extmarks > semantic_tokens > treesitter > syntax
+---Because certain highlights (like semantic tokens) are only rendered when in view,
+---we pass in the cursor position to jump back after inspection
+---This will scroll the view temporarily
 ---@param bufnr number Buffer number
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based byte offset)
+---@param view vim.fn.winsaveview.ret View state to restore later
 ---@return string|nil Highlight group name or nil
-local function get_hl_at_pos(bufnr, row, col)
-  -- Use vim.inspect_pos which reliably returns all highlights at a position
+local function get_hl_at_pos(bufnr, row, col, view)
+  scroll_into_view(row, col)
+
   local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
   if not ok or not info then
     return nil
   end
 
-  -- Priority 1: Semantic tokens (highest precedence)
-  local semantic_hl = extract_semantic_hl(info)
-  if semantic_hl then
-    return semantic_hl
-  end
-
-  -- Priority 2: Treesitter captures
-  local treesitter_hl = extract_treesitter_hl(info)
-  if treesitter_hl then
-    return treesitter_hl
-  end
-
-  -- Priority 3: Syntax highlighting
-  if info.syntax and #info.syntax > 0 then
-    local syn = info.syntax[#info.syntax]
-    if syn.hl_group then
-      return syn.hl_group
-    end
-  end
-
-  -- Priority 4: Extmarks with highlights
+  -- Priority 1: Extmarks with highlights (highest precedence)
   if info.extmarks and #info.extmarks > 0 then
     for i = #info.extmarks, 1, -1 do
       local extmark = info.extmarks[i]
       if extmark.opts and extmark.opts.hl_group then
+        restore_view(row, view)
         return extmark.opts.hl_group
       end
     end
   end
 
+  -- Priority 2: Semantic tokens
+  local semantic_hl = extract_semantic_hl(info)
+  if semantic_hl then
+    restore_view(row, view)
+    return semantic_hl
+  end
+
+  -- Priority 3: Treesitter captures
+  local treesitter_hl = extract_treesitter_hl(info)
+  if treesitter_hl then
+    restore_view(row, view)
+    return treesitter_hl
+  end
+
+  -- Priority 4: Syntax highlighting
+  if info.syntax and #info.syntax > 0 then
+    local syn = info.syntax[#info.syntax]
+    if syn.hl_group then
+      restore_view(row, view)
+      return syn.hl_group
+    end
+  end
+
+  restore_view(row, view)
   return nil
 end
 
@@ -408,11 +436,11 @@ end
 ---@param bufnr number Buffer number
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based byte offset)
+---@param view vim.fn.winsaveview.ret View state to restore later
 ---@return string|nil Highlight group name or nil
-local function get_hl_at(hl_map, bufnr, row, col)
-  -- Try vim.inspect_pos first (Neovim 0.9+) for accurate semantic token support
+local function get_hl_at(hl_map, bufnr, row, col, view)
   if vim.inspect_pos then
-    local hl = get_hl_at_pos(bufnr, row, col)
+    local hl = get_hl_at_pos(bufnr, row, col, view)
     if hl then
       return hl
     end
@@ -458,6 +486,8 @@ local function export_buf_to_html(opts)
   local user_config = Config.get()
   local bufnr = vim.api.nvim_get_current_buf()
   local filepath = opts.filepath or default_output_path(bufnr)
+  -- Save current view to restore later
+  local view = vim.fn.winsaveview()
 
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local hl_map = build_hl_map(bufnr)
@@ -507,7 +537,7 @@ local function export_buf_to_html(opts)
     local current_segment = ""
     while col < #line do
       local ch = line:sub(col + 1, col + 1)
-      local hl_group = get_hl_at(hl_map, bufnr, row - 1, col)
+      local hl_group = get_hl_at(hl_map, bufnr, row - 1, col, view)
       if hl_group ~= current_hl then
         if current_segment ~= "" then
           ---@type SnapHighlightStyle|nil
@@ -678,10 +708,20 @@ M.image_to_clipboard = function(opts)
   opts = opts or {}
   local user_config = Config.get()
   local save_path = M.get_default_save_path()
-  local filename = user_config.filename_pattern and user_config.filename_pattern:gsub("%%t", os.date("%Y%m%d_%H%M%S"))
+  if not save_path then
+    Logger.error("No valid save path found for screenshots. Please set 'output_dir' in config")
+    return
+  end
+  local filename = user_config.filename_pattern
+      and (user_config.filename_pattern:gsub("%%t", os.date("%Y%m%d_%H%M%S")) or user_config.filename_pattern)
     or nil
+  if not filename then
+    Logger.error("Filename pattern is not set correctly.")
+    return
+  end
+  local filepath = save_path and filename and (save_path .. "/" .. filename .. ".png") or ""
   local jsonPayload = vim.fn.json_encode(export_buf_to_html({
-    filepath = save_path and filename and (save_path .. "/" .. filename) or nil,
+    filepath = filepath,
     range = opts.range,
     type = types.SnapPayloadType.image,
   }))

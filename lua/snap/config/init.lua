@@ -13,8 +13,9 @@ M.defaults = {
   additional_template_data = nil, -- Table of additional data to pass to the template (optional)
   -- Output directory for screenshots (defaults to $HOME/Pictrures/Screenshots if nil)
   output_dir = nil,
-  -- Screenshot filename pattern (supports %t for timestamp)
-  filename_pattern = "snap.nvim_%t.png",
+  -- Generated filename pattern (supports %t for timestamp)
+  -- e.g., "screenshot_%t" -> "screenshot_20240615_153045.png"
+  filename_pattern = "snap.nvim_%t",
   copy_to_clipboard = {
     image = true, -- Whether to copy the image to clipboard
     html = true, -- Whether to copy the HTML to clipboard

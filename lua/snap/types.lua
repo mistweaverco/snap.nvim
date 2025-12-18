@@ -36,6 +36,11 @@ M.SnapConfigFontSettingsFont = {
   bold_italic = "bold_italic",
 }
 
+---Neovim cursor position
+---@class SnapCursorPosition
+---@field line number Line number (1-based)
+---@field col number Column number (1-based)
+
 ---Visual range for taking a screenshot
 ---@class SnapConfigNotify
 ---@field enabled boolean Whether to show notifications
