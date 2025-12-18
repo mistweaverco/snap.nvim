@@ -47,7 +47,7 @@ jobs:
           echo "needs-build=false" >> $GITHUB_OUTPUT
 
   build:
-    name: Build ${{ matrix.platform }}
+    name: Build backend for ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
     needs: check-backend-changes
     if: needs.check-backend-changes.outputs.needs-build == 'true'
