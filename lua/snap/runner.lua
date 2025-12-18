@@ -343,6 +343,11 @@ local function extract_treesitter_hl(info)
   return nil
 end
 
+-- TODO: Optimize scrolling
+-- Check for visual selection to avoid unnecessary scrolling
+-- Show loading indicator during scrolling
+-- Check if it is possible to prevent user-interaction during automated scrolling
+
 ---Scroll view to specific position temporarily
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based)
