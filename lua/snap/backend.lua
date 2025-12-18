@@ -7,8 +7,8 @@ local DOWNLOAD_BASE_URL = "https://github.com/mistweaverco/snap.nvim/releases/do
 local Globals = require("snap.globals")
 
 local function platform()
-  local system = vim.loop.os_uname().sysname
-  local arch = vim.loop.os_uname().machine
+  local system = vim.uv.os_uname().sysname
+  local arch = vim.uv.os_uname().machine
 
   local os_name
   if system == "Darwin" then
