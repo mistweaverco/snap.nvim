@@ -42,28 +42,171 @@ capture the entire Neovim window.
 
 ## Install
 
-Via [lazy.nvim](https://github.com/folke/lazy.nvim):
+Please use release tags when installing the plugin to ensure
+compatibility and stability.
 
-```lua
-{ 'mistweaverco/snap.nvim', opts = {} },
-```
+The `main` branch may contain breaking changes
+and isn't guaranteed to be stable.
 
-> [!NOTE]
-> `opts` needs to be at least an empty table `{}` and can't be completely omitted.
+### lazy.nvim
 
-## Configuration
-
-- `templateFilepath` (optional): Absolute path to a custom handlebars template file.
-  See the [default template](./templates/default.hbs) for reference.
-- `additional_template_data` (optional): A table of additional data to pass to your custom the handlebars template.
-   Available as `data.YOURKEY` variables in the template.
+See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
 {
   'mistweaverco/snap.nvim',
+  version = 'v1.0.3',
+  opts = {}
+},
+```
+
+> [!IMPORTANT]
+> `opts` needs to be at least an empty table `{}` and can't be completely omitted.
+
+### packer.nvim
+
+See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
+
+```lua
+use {
+  'mistweaverco/snap.nvim',
+  tag = 'v1.0.3',
+  config = function()
+    require('snap').setup({})
+  end
+})
+```
+
+> [!IMPORTANT]
+> `setup` call needs to have at least an empty table `{}` and
+> can't be completely omitted.
+
+### Neovim built-in package manager
+
+```lua
+vim.pack.add({
+  src = 'https://github.com/mistweaverco/snap.nvim.git',
+  version = 'v1.0.3',
+})
+require('snap').setup({})
+```
+
+> [!IMPORTANT]
+> `setup` call needs to have at least an empty table `{}` and
+> can't be completely omitted.
+
+## Configuration
+
+### Configure `templateFilepath`
+
+Optional. Defaults to `nil`.
+
+Absolute path to a custom handlebars template file.
+
+See the [default template](./templates/default.hbs) for reference.
+
+### Configure `additional_template_data`
+
+Optional. Defaults to `{}`.
+
+A table of additional data to pass to your custom the handlebars template.
+
+Available as `data.YOURKEY` variables in the template.
+
+### Configure `font_settings`
+
+Optional. Defaults to:
+
+```lua
+{
+  size = 14,
+  line_height = 0.8,
+  default = {
+    name = "FiraCode Nerd Font",
+    file = nil,
+  },
+  bold = {
+    name = "FiraCode Nerd Font",
+    file = nil,
+  },
+  italic = {
+    name = "FiraCode Nerd Font",
+    file = nil,
+  },
+  bold_italic = {
+    name = "FiraCode Nerd Font",
+    file = nil,
+  },
+}
+```
+
+Configure font settings for the screenshot.
+
+Font settings are optional,
+but recommended to ensure that the screenshot
+matches your Neovim setup.
+
+We can't detect your font settings (of your terminal) automatically,
+so you need to specify them manually.
+
+### Configure `timeout`
+
+Optional. Defaults to `5000`.
+
+Timeout for the screenshot command in milliseconds.
+
+### Configure `output_dir`
+
+Optional. Defaults to `$HOME/Pictures/Screenshots`.
+
+Directory to save screenshots.
+
+### Configure `filename_pattern`
+
+Optional. Defaults to `snap.nvim_%t.png`.
+
+Filename pattern for the screenshot files.
+
+Supports the following placeholders:
+
+- `%t` - Timestamp in `YYYYMMDD_HHMMSS` format
+
+### Configure `template`
+
+Optional. Defaults to `default`.
+
+Template to use for rendering screenshots.
+
+Currently, only the `default` template is supported.
+
+### Configure `debug`
+
+Optional. Defaults to `nil`.
+
+If set, no pre-compiled binaries will be downloaded
+and the plugin will attempt to run directly from source.
+
+Requires [Bun](https://bun.sh/) to be installed on your system.
+Additionally you need to install the dependencies
+by running `bun install` in the plugin directory.
+
+```lua
+{
+  backend = "bun",         -- Debug backend to use (currently only "bun" is supported)
+  log_level = "info",      -- Log level for debugging (e.g., "info", "debug", "error")
+}
+```
+
+### Full Example Configuration
+
+```lua
+{
+  'mistweaverco/snap.nvim',
+  version = 'v1.0.3',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
-    templateFilepath = nil, -- Absolute path to a custom handlebars template file (optional)
+    template = "default", -- Template to use for rendering screenshots (currently only "default" is supported)
+    templateFilepath = nil, -- Absolute path to a custom handlebars template file (optional), overrides 'template' option
     -- Additional data to pass to the your custom handlebars template (optional)
     additional_template_data = {
       author = "Your Name",
@@ -118,5 +261,39 @@ Via [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ## Commands
 
-- `:Snap` - Save a screenshot of the current file or visual selection and copy it to the clipboard as an image.
-- `:Snap html` - Copy the HTML representation of the current file or visual selection to the clipboard.
+All commands can be run in normal or visual mode.
+
+> [!IMPORTANT]
+> Clipboard functionality depends on your system's clipboard
+> and Neovim's clipboard support being properly configured.
+>
+> For Linux systems, ensure that you have
+> `xclip` installed for clipboard operations to work.
+>
+> On macOS, clipboard support is typically available by default.
+>
+> On Windows, clipboard support is also generally available by default.
+
+> [!NOTE]
+> We're working on adding streamlined support for
+> all major operating systems via the backend binary instead of shelling out.
+
+### Snap command
+
+Usage: `:Snap`
+
+Save a screenshot of the current file or
+visual selection and copy it to the clipboard as an image.
+
+## Snap arguments
+
+Usage: `:Snap args`
+
+Snap allows different arguments to control its behavior.
+
+### Snap html argument
+
+Usage: `:Snap html`
+
+Save a screenshot of the current file or visual selection as an HTML file and
+copy the HTML representation to the clipboard.
