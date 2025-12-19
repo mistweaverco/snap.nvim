@@ -511,6 +511,7 @@ local function export_buf_to_html(opts)
         bgColor = DEFAULT_BG,
         fgColor = DEFAULT_FG,
       },
+      template = user_config.template or "default",
       toClipboard = true,
       filepath = filepath,
       fontSettings = user_config.font_settings or Config.defaults.font_settings,

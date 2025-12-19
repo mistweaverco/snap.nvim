@@ -9,6 +9,7 @@ M.SnapConfigTemplate = {
 ---@enum SnapConfigTemplate
 M.SnapConfigTemplate = {
   default = "default",
+  macos = "macos",
 }
 
 ---@enum SnapPayloadType

@@ -3,11 +3,14 @@ import path from "path";
 import Handlebars from "handlebars";
 import nodeHtmlToImage from "node-html-to-image";
 import defaultTemplatePath from "../../../templates/default.hbs" with { type: "file" };
+import linuxTemplatePath from "../../../templates/linux.hbs" with { type: "file" };
+import macOSTemplatePath from "../../../templates/macos.hbs" with { type: "file" };
 import {
   Clipboard,
   getJSONFromStdin,
   type JSONObjectHTMLSuccessRequest,
   type JSONObjectImageSuccessRequest,
+  JSONRequestTemplate,
   JSONRequestType,
   type NodeHTMLToImageBuffer,
   writeJSONToStdout,
@@ -15,6 +18,7 @@ import {
 
 const main = async () => {
   const jsonPayload = await getJSONFromStdin();
+
   if ("error" in jsonPayload) {
     writeJSONToStdout({
       success: false,
@@ -31,7 +35,17 @@ const main = async () => {
     html = fs.readFileSync(templateFilepath, "utf-8");
   } else {
     // Use the embedded default template
-    html = await Bun.file(defaultTemplatePath).text();
+    switch (jsonPayload.data.template) {
+      case JSONRequestTemplate.Linux:
+        html = await Bun.file(linuxTemplatePath).text();
+        break;
+      case JSONRequestTemplate.MacOS:
+        html = await Bun.file(macOSTemplatePath).text();
+        break;
+      default:
+        html = await Bun.file(defaultTemplatePath).text();
+        break;
+    }
   }
   let json: JSONObjectImageSuccessRequest | JSONObjectHTMLSuccessRequest;
 

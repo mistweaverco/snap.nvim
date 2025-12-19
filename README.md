@@ -178,7 +178,18 @@ Optional. Defaults to `default`.
 
 Template to use for rendering screenshots.
 
-Currently, only the `default` template is supported.
+Valid options are:
+
+- `default` - The default template provided by the plugin
+- `macos` - A macOS-style template
+- `linux` - A Linux-style template
+
+### Configure `template_filepath`
+
+Optional. Defaults to `nil`.
+
+Absolute path to a custom handlebars template file.
+If set, this option overrides the `template` option.
 
 ### Configure `copy_to_clipboard`
 
@@ -190,8 +201,6 @@ Optional. Defaults to:
   html = true,
 }
 ```
-
-Configure whether to copy the output to the clipboard.
 
 ### Configure `debug`
 
@@ -220,7 +229,7 @@ by running `bun install` in the plugin directory.
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
     template = "default", -- Template to use for rendering screenshots (currently only "default" is supported)
-    templateFilepath = nil, -- Absolute path to a custom handlebars template file (optional), overrides 'template' option
+    template_filepath = nil, -- Absolute path to a custom handlebars template file (optional), overrides 'template' option
     -- Additional data to pass to the your custom handlebars template (optional)
     additional_template_data = {
       author = "Your Name",

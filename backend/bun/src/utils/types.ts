@@ -24,6 +24,12 @@ interface FontSettings {
   };
 }
 
+export enum JSONRequestTemplate {
+  Default = "default",
+  Linux = "linux",
+  MacOS = "macos",
+}
+
 export interface JSONObjectHTMLSuccessRequest {
   success: true;
   debug: boolean;
@@ -33,6 +39,7 @@ export interface JSONObjectHTMLSuccessRequest {
       fgColor: string;
       bgColor: string;
     };
+    template?: JSONRequestTemplate;
     templateFilepath?: string;
     additionalTemplateData?: { [key: string]: unknown };
     toClipboard: boolean;
@@ -52,6 +59,7 @@ export interface JSONObjectImageSuccessRequest {
       fgColor: string;
       bgColor: string;
     };
+    template?: JSONRequestTemplate;
     outputImageFormat: "png" | "jpeg";
     fontSettings: FontSettings;
     templateFilepath?: string;

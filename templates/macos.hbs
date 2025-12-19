@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>snap.nvim</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: transparent;
+    }
+
+    body {
+      padding: 10px 20px;
+      width: calc({{minWidth}}px + 30px);
+    }
+
+    .title-bar {
+      display: flex;
+      align-items: center;
+      height: 36px;
+      background-color: #1e2030;
+      border: 1px solid #2f334d;
+      border-radius: 8px 8px 0 0;
+      padding: 0 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      position: relative;
+    }
+
+    .window-controls {
+      display: flex;
+      gap: 8px;
+      position: absolute;
+      left: 12px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .close { background-color: #ff5f56; }
+    .minimize { background-color: #ffbd2e; }
+    .maximize { background-color: #27c93f; }
+
+    .title-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      pointer-events: none;
+    }
+
+    .title-text {
+      color: #a9b1d6;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.4px;
+    }
+
+    pre#snap {
+      margin: 0;
+      background-color: {{theme.bgColor}};
+      border-bottom-left-radius: 10px;
+      border-bottom-right-radius: 10px;
+      color: {{theme.fgColor}};
+      display: block;
+      font-family: '{{fontSettings.fonts.default.name}}', monospace;
+      font-size: {{fontSettings.size}}px;
+      line-height: {{fontSettings.line_height}};
+      padding: 15px;
+      white-space: pre; /* Preserve whitespace formatting */
+      word-break: keep-all; /* Prevent breaking words */
+    }
+
+    pre#snap .snap-is-italic {
+      font-family: '{{fontSettings.fonts.italic.name}}', monospace;
+      font-style: italic;
+    }
+
+    pre#snap .snap-is-bold {
+      font-family: '{{fontSettings.fonts.bold.name}}', monospace;
+      font-weight: bold;
+    }
+
+    pre#snap .snap-is-bold-italic {
+      font-family: '{{fontSettings.fonts.bold_italic.name}}', monospace;
+      font-style: italic;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div class="title-bar">
+      <div class="window-controls">
+        <div class="dot close"></div>
+        <div class="dot minimize"></div>
+        <div class="dot maximize"></div>
+      </div>
+      <div class="title-container">
+        <span class="title-text">snap.nvim</span>
+      </div>
+    </div>
+    <pre id="snap">{{{code}}}</pre>
+  </div>
+</body>
+</html>
