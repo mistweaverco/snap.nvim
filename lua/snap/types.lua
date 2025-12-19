@@ -62,14 +62,6 @@ M.SnapConfigFontSettingsFont = {
 ---@field type SnapPayloadType|nil Type of screenshot to take ("image" or "html", defaults to "image" if nil)
 ---@field range SnapVisualRange|nil Visual range for taking a screenshot (optional)
 
----@class SnapHighlightStyle
----@field inline_css string CSS style string
----@field cls_name string|nil Class name string for HTML elements
----(possible concat values are "snap-is-bold", "snap-is-italic", "snap-is-underline")
----the output string can contain multiple classes separated by spaces
----e.g., "snap-is-bold snap-is-italic"
----@field hl_table table Highlight definition table
-
 ---User configuration for the screenshot plugin, extending SnapConfig
 ---@class SnapUserConfig
 ---@field user_command string|nil Name of the user command to take screenshots, defaults to "Snap"
@@ -88,10 +80,20 @@ M.SnapConfigFontSettingsFont = {
 ---@field bgColor string Background color in hex format (e.g., "#000000")
 ---@field fgColor string Foreground color in hex format (e.g., "#ffffff")
 
+---@class SnapPayloadDataCodeItem
+---@field fg string Foreground color in hex format (e.g., "#ffffff")
+---@field bg string Background color in hex format (e.g., "#000000")
+---@field text string Text content of the code line
+---@field bold boolean Whether the text is bold
+---@field italic boolean Whether the text is italic
+---@field underline boolean Whether the text is underlined
+---@field hl_table table Highlight definition table
+
 ---@class SnapPayloadData
 ---@field theme SnapPayloadDataTheme Theme colors for the screenshot
 ---@field additional_template_data table
----@field code table[] Array of code lines with their respective highlight styles
+---@field code table<number, table<SnapPayloadDataCodeItem>> Code lines for the screenshot,
+---keyed by line number (1-based), each value is a table of SnapPayloadDataCodeItem, for each segment of the line
 ---@field filepath string
 ---@field fontSettings SnapConfigFontSettings
 ---@field minWidth number Minimum width in pixels based on longest line

@@ -30,6 +30,16 @@ export enum JSONRequestTemplate {
   MacOS = "macos",
 }
 
+export interface JSONObjectCodeLine {
+  fg: string;
+  bg: string;
+  text: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  hl_table: unknown;
+}
+
 export interface JSONObjectHTMLSuccessRequest {
   success: true;
   debug: boolean;
@@ -44,7 +54,7 @@ export interface JSONObjectHTMLSuccessRequest {
     additionalTemplateData?: { [key: string]: unknown };
     toClipboard: boolean;
     transparent: boolean;
-    code: string[];
+    code: Array<JSONObjectCodeLine[]>;
     filepath: string;
     minWidth: number;
   };
@@ -66,7 +76,7 @@ export interface JSONObjectImageSuccessRequest {
     additionalTemplateData?: { [key: string]: unknown };
     toClipboard: boolean;
     transparent: boolean;
-    code: string[];
+    code: Array<JSONObjectCodeLine[]>;
     filepath: string;
     minWidth: number;
   };

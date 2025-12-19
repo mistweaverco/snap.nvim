@@ -8,6 +8,7 @@ import macOSTemplatePath from "../../../templates/macos.hbs" with { type: "file"
 import {
   Clipboard,
   getJSONFromStdin,
+  type JSONObjectCodeLine,
   type JSONObjectHTMLSuccessRequest,
   type JSONObjectImageSuccessRequest,
   JSONRequestTemplate,
@@ -15,6 +16,32 @@ import {
   type NodeHTMLToImageBuffer,
   writeJSONToStdout,
 } from "./utils";
+
+const assembleCodeLines = (rows: Array<JSONObjectCodeLine[]>): string[] => {
+  return rows
+    .map((line) => {
+      return line
+        .map((segment) => {
+          let segmentHTML = segment.text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          if (segment.bold) {
+            segmentHTML = `<b>${segmentHTML}</b>`;
+          }
+          if (segment.italic) {
+            segmentHTML = `<i>${segmentHTML}</i>`;
+          }
+          if (segment.underline) {
+            segmentHTML = `<u>${segmentHTML}</u>`;
+          }
+          return segmentHTML;
+        })
+        .join("");
+    })
+    .map((line) => (line.trim() === "" ? "&nbsp;" : line))
+    .map((line) => `<div class="code-line">${line}</div>`);
+};
 
 const main = async () => {
   const jsonPayload = await getJSONFromStdin();
@@ -50,14 +77,7 @@ const main = async () => {
   let json: JSONObjectImageSuccessRequest | JSONObjectHTMLSuccessRequest;
 
   let buffer: NodeHTMLToImageBuffer;
-  const code = jsonPayload.data.code
-    .map((line) => {
-      if (line.trim() === "") {
-        return `<div class="snap-code-line">&nbsp;</div>`;
-      }
-      return `<div class="snap-code-line">${line}</div>`;
-    })
-    .join("\n");
+  const code = assembleCodeLines(jsonPayload.data.code);
 
   switch (jsonPayload.data.type) {
     case JSONRequestType.CodeImageGeneration:

@@ -7,14 +7,6 @@ local UIBlock = require("snap.ui.block")
 
 local BACKEND_BIN_PATH = Backend.get_bin_path()
 
-local function html_escape(s)
-  s = s:gsub("&", "&amp;")
-  s = s:gsub("<", "&lt;")
-  s = s:gsub(">", "&gt;")
-  s = s:gsub('"', "&quot;")
-  return s
-end
-
 ---Convert a color number to hex string
 ---@param color number Color as integer
 ---@return string Hex color string or nil
@@ -107,34 +99,19 @@ end
 
 ---Convert highlight definition table to CSS style string
 ---@param t table|nil Highlight definition table
----@return SnapHighlightStyle|nil style CSS style object
-local function hl_table_to_style(t)
-  local cls_names = {}
+---@param text string Text content (for future use)
+---@return SnapPayloadDataCodeItem|nil Highlight style or nil
+local function hl_table_to_style(t, text)
   if not t then
     return nil
   end
-  local parts = {}
-  if t.fg then
-    table.insert(parts, "color:" .. t.fg)
-  end
-  if t.bg then
-    table.insert(parts, "background-color:" .. t.bg)
-  end
-  if t.bold then
-    table.insert(parts, "font-weight:bold")
-    table.insert(cls_names, "snap-is-bold")
-  end
-  if t.italic then
-    table.insert(parts, "font-style:italic")
-    table.insert(cls_names, "snap-is-italic")
-  end
-  if t.underline then
-    table.insert(parts, "text-decoration:underline")
-    table.insert(cls_names, "snap-is-underline")
-  end
   return {
-    inline_css = table.concat(parts, "; "),
-    cls_name = #cls_names > 0 and table.concat(cls_names, " ") or nil,
+    fg = t.fg or DEFAULT_FG,
+    bg = t.bg or DEFAULT_BG,
+    text = text,
+    bold = t.bold or false,
+    italic = t.italic or false,
+    underline = t.underline or false,
     hl_table = t,
   }
 end
@@ -565,7 +542,8 @@ local function export_buf_to_html(opts)
   local ui_block_releaser = UIBlock.show_loading_locked("Fetching highlights...")
 
   for row, line in ipairs(lines) do
-    local out_line = {}
+    ---@type table<SnapPayloadDataCodeItem|nil>
+    local line_items = {}
     local col = 0
     local current_hl = nil
     local current_segment = ""
@@ -574,34 +552,39 @@ local function export_buf_to_html(opts)
       local hl_group = get_hl_at(win, hl_map, bufnr, row - 1, col, view, opts.range)
       if hl_group ~= current_hl then
         if current_segment ~= "" then
-          ---@type SnapHighlightStyle|nil
+          ---@type SnapPayloadDataCodeItem|nil
           local style = nil
-          local resolved_hl = nil
           if current_hl then
             local cached = hl_style_cache[current_hl]
             if cached then
               style = cached.style
-              resolved_hl = cached.resolved_hl
             else
-              local hldef
+              local hldef, resolved_hl
               hldef, resolved_hl = get_hl_by_name(current_hl)
-              style = hl_table_to_style(hldef)
+              style = hl_table_to_style(hldef, current_segment)
               hl_style_cache[current_hl] = { style = style, resolved_hl = resolved_hl }
             end
           end
           if style then
-            table.insert(
-              out_line,
-              string.format(
-                '<span data-hlgroup="%s" style="%s" class="%s">%s</span>',
-                resolved_hl or current_hl or "default",
-                style.inline_css,
-                style.cls_name,
-                html_escape(current_segment)
-              )
-            )
+            table.insert(line_items, {
+              fg = style.fg,
+              bg = style.bg,
+              text = current_segment,
+              bold = style.bold,
+              italic = style.italic,
+              underline = style.underline,
+              hl_table = style.hl_table,
+            })
           else
-            table.insert(out_line, html_escape(current_segment))
+            table.insert(line_items, {
+              fg = DEFAULT_FG,
+              bg = DEFAULT_BG,
+              text = current_segment,
+              bold = false,
+              italic = false,
+              underline = false,
+              hl_table = {},
+            })
           end
         end
         current_segment = ch
@@ -612,7 +595,7 @@ local function export_buf_to_html(opts)
       col = col + 1
     end
     if current_segment ~= "" then
-      ---@type SnapHighlightStyle|nil
+      ---@type SnapPayloadDataCodeItem|nil
       local style = nil
       local resolved_hl = nil
       if current_hl then
@@ -623,31 +606,38 @@ local function export_buf_to_html(opts)
         else
           local hldef
           hldef, resolved_hl = get_hl_by_name(current_hl)
-          style = hl_table_to_style(hldef)
+          style = hl_table_to_style(hldef, current_segment)
           hl_style_cache[current_hl] = { style = style, resolved_hl = resolved_hl }
         end
       end
       if style then
-        table.insert(
-          out_line,
-          string.format(
-            '<span data-hlgroup="%s" style="%s" class="%s">%s</span>',
-            resolved_hl or current_hl or "default",
-            style.inline_css,
-            style.cls_name,
-            html_escape(current_segment)
-          )
-        )
+        table.insert(line_items, {
+          fg = style.fg,
+          bg = style.bg,
+          text = current_segment,
+          bold = style.bold,
+          italic = style.italic,
+          underline = style.underline,
+          hl_table = style.hl_table,
+        })
       else
-        table.insert(out_line, html_escape(current_segment))
+        table.insert(line_items, {
+          fg = DEFAULT_FG,
+          bg = DEFAULT_BG,
+          text = current_segment,
+          bold = false,
+          italic = false,
+          underline = false,
+          hl_table = {},
+        })
       end
     end
     if opts.range then
       if row >= opts.range.start_line and row <= opts.range.end_line then
-        table.insert(snap_payload.data.code, table.concat(out_line, ""))
+        table.insert(snap_payload.data.code, line_items)
       end
     else
-      table.insert(snap_payload.data.code, table.concat(out_line, ""))
+      table.insert(snap_payload.data.code, line_items)
     end
   end
   ui_block_releaser()
