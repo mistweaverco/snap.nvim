@@ -350,16 +350,27 @@ end
 -- Check if it is possible to prevent user-interaction during automated scrolling
 
 ---Scroll view to specific position temporarily
+---@param winnr number Window number
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based)
+---@param range SnapVisualRange|nil Range to consider
 ---@return nil
-local scroll_into_view = function(winnr, row, col)
+local scroll_into_view = function(winnr, row, col, range)
   local nvim_cursor = vim.api.nvim_win_get_cursor(winnr)
   local height = vim.api.nvim_win_get_height(winnr)
   -- check if already in view via cursor position,
   -- if in view, no need to scroll
   if row >= (nvim_cursor[1] - 1) and row < (nvim_cursor[1] - 1 + height) then
+    vim.cmd("redraw")
     return
+  end
+  if range then
+    -- check if range is already in view
+    -- if in view, no need to scroll
+    if range.start_line >= (nvim_cursor[1] - 1) and range.end_line < (nvim_cursor[1] - 1 + height) then
+      vim.cmd("redraw")
+      return
+    end
   end
   -- scroll so that row is the top most line
   vim.api.nvim_win_set_cursor(winnr, { row + 1, col })
@@ -388,9 +399,10 @@ end
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based byte offset)
 ---@param view vim.fn.winsaveview.ret View state to restore later
+---@param range SnapVisualRange|nil Range to consider
 ---@return string|nil Highlight group name or nil
-local function get_hl_at_pos(winnr, bufnr, row, col, view)
-  scroll_into_view(winnr, row, col)
+local function get_hl_at_pos(winnr, bufnr, row, col, view, range)
+  scroll_into_view(winnr, row, col, range)
 
   local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
   if not ok or not info then
@@ -444,10 +456,11 @@ end
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based byte offset)
 ---@param view vim.fn.winsaveview.ret View state to restore later
+---@param range SnapVisualRange|nil Range to consider
 ---@return string|nil Highlight group name or nil
-local function get_hl_at(winr, hl_map, bufnr, row, col, view)
+local function get_hl_at(winr, hl_map, bufnr, row, col, view, range)
   if vim.inspect_pos then
-    local hl = get_hl_at_pos(winr, bufnr, row, col, view)
+    local hl = get_hl_at_pos(winr, bufnr, row, col, view, range)
     if hl then
       return hl
     end
@@ -524,10 +537,20 @@ local function export_buf_to_html(opts)
   }
 
   -- Calculate the longest line length (in characters) for min width calculation
+  -- based on the selection or entire buffer
+  -- This is a rough estimate and may not be accurate for proportional fonts
   local longest_line_len = 0
-  for _, line in ipairs(lines) do
-    if #line > longest_line_len then
-      longest_line_len = #line
+  for row, line in ipairs(lines) do
+    if opts.range then
+      if row >= opts.range.start_line and row <= opts.range.end_line then
+        if #line > longest_line_len then
+          longest_line_len = #line
+        end
+      end
+    else
+      if #line > longest_line_len then
+        longest_line_len = #line
+      end
     end
   end
 
@@ -548,7 +571,7 @@ local function export_buf_to_html(opts)
     local current_segment = ""
     while col < #line do
       local ch = line:sub(col + 1, col + 1)
-      local hl_group = get_hl_at(win, hl_map, bufnr, row - 1, col, view)
+      local hl_group = get_hl_at(win, hl_map, bufnr, row - 1, col, view, opts.range)
       if hl_group ~= current_hl then
         if current_segment ~= "" then
           ---@type SnapHighlightStyle|nil
@@ -619,7 +642,6 @@ local function export_buf_to_html(opts)
         table.insert(out_line, html_escape(current_segment))
       end
     end
-    -- table.insert(snap_payload.data.code, table.concat(out_line, ""))
     if opts.range then
       if row >= opts.range.start_line and row <= opts.range.end_line then
         table.insert(snap_payload.data.code, table.concat(out_line, ""))
