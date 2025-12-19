@@ -3,6 +3,7 @@ local types = require("snap.types")
 local Logger = require("snap.logger")
 local Config = require("snap.config")
 local Backend = require("snap.backend")
+local UIBlock = require("snap.ui.block")
 
 local BACKEND_BIN_PATH = Backend.get_bin_path()
 
@@ -352,26 +353,25 @@ end
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based)
 ---@return nil
-local scroll_into_view = function(row, col)
-  local nvim_cursor = vim.api.nvim_win_get_cursor(0)
-  local win = vim.api.nvim_get_current_win()
-  local height = vim.api.nvim_win_get_height(win)
+local scroll_into_view = function(winnr, row, col)
+  local nvim_cursor = vim.api.nvim_win_get_cursor(winnr)
+  local height = vim.api.nvim_win_get_height(winnr)
   -- check if already in view via cursor position,
   -- if in view, no need to scroll
   if row >= (nvim_cursor[1] - 1) and row < (nvim_cursor[1] - 1 + height) then
     return
   end
   -- scroll so that row is the top most line
-  vim.api.nvim_win_set_cursor(win, { row + 1, col })
+  vim.api.nvim_win_set_cursor(winnr, { row + 1, col })
   vim.cmd("redraw")
 end
 
 ---Scroll back if at last row of the view
+---@param winnr number Window number
 ---@param row number Line number (0-based)
 ---@param view vim.fn.winsaveview.ret View state to restore later
-local restore_view = function(row, view)
-  local win = vim.api.nvim_get_current_win()
-  local rows = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(win))
+local restore_view = function(winnr, row, view)
+  local rows = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(winnr))
   if row >= (rows - 1) then
     vim.fn.winrestview(view)
   end
@@ -383,13 +383,14 @@ end
 ---Because certain highlights (like semantic tokens) are only rendered when in view,
 ---we pass in the cursor position to jump back after inspection
 ---This will scroll the view temporarily
+---@param winnr number Window number
 ---@param bufnr number Buffer number
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based byte offset)
 ---@param view vim.fn.winsaveview.ret View state to restore later
 ---@return string|nil Highlight group name or nil
-local function get_hl_at_pos(bufnr, row, col, view)
-  scroll_into_view(row, col)
+local function get_hl_at_pos(winnr, bufnr, row, col, view)
+  scroll_into_view(winnr, row, col)
 
   local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
   if not ok or not info then
@@ -401,7 +402,7 @@ local function get_hl_at_pos(bufnr, row, col, view)
     for i = #info.extmarks, 1, -1 do
       local extmark = info.extmarks[i]
       if extmark.opts and extmark.opts.hl_group then
-        restore_view(row, view)
+        restore_view(winnr, row, view)
         return extmark.opts.hl_group
       end
     end
@@ -410,14 +411,14 @@ local function get_hl_at_pos(bufnr, row, col, view)
   -- Priority 2: Semantic tokens
   local semantic_hl = extract_semantic_hl(info)
   if semantic_hl then
-    restore_view(row, view)
+    restore_view(winnr, row, view)
     return semantic_hl
   end
 
   -- Priority 3: Treesitter captures
   local treesitter_hl = extract_treesitter_hl(info)
   if treesitter_hl then
-    restore_view(row, view)
+    restore_view(winnr, row, view)
     return treesitter_hl
   end
 
@@ -425,27 +426,28 @@ local function get_hl_at_pos(bufnr, row, col, view)
   if info.syntax and #info.syntax > 0 then
     local syn = info.syntax[#info.syntax]
     if syn.hl_group then
-      restore_view(row, view)
+      restore_view(winnr, row, view)
       return syn.hl_group
     end
   end
 
-  restore_view(row, view)
+  restore_view(winnr, row, view)
   return nil
 end
 
 ---Get highlight group at specific position
 ---Uses vim.inspect_pos for accurate results including semantic tokens
 ---Falls back to hl_map lookup if vim.inspect_pos is not available
+---@param winr number Window number
 ---@param hl_map table Highlight map (used as fallback)
 ---@param bufnr number Buffer number
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based byte offset)
 ---@param view vim.fn.winsaveview.ret View state to restore later
 ---@return string|nil Highlight group name or nil
-local function get_hl_at(hl_map, bufnr, row, col, view)
+local function get_hl_at(winr, hl_map, bufnr, row, col, view)
   if vim.inspect_pos then
-    local hl = get_hl_at_pos(bufnr, row, col, view)
+    local hl = get_hl_at_pos(winr, bufnr, row, col, view)
     if hl then
       return hl
     end
@@ -535,6 +537,8 @@ local function export_buf_to_html(opts)
   local char_width_factor = 0.6
   local padding = 30
   snap_payload.data.minWidth = math.ceil(longest_line_len * font_size * char_width_factor) + padding
+  local win = vim.api.nvim_get_current_win()
+  local ui_block_releaser = UIBlock.show_loading_locked("Fetching highlights...")
 
   for row, line in ipairs(lines) do
     local out_line = {}
@@ -543,7 +547,7 @@ local function export_buf_to_html(opts)
     local current_segment = ""
     while col < #line do
       local ch = line:sub(col + 1, col + 1)
-      local hl_group = get_hl_at(hl_map, bufnr, row - 1, col, view)
+      local hl_group = get_hl_at(win, hl_map, bufnr, row - 1, col, view)
       if hl_group ~= current_hl then
         if current_segment ~= "" then
           ---@type SnapHighlightStyle|nil
@@ -623,6 +627,7 @@ local function export_buf_to_html(opts)
       table.insert(snap_payload.data.code, table.concat(out_line, ""))
     end
   end
+  ui_block_releaser()
   return snap_payload
 end
 
