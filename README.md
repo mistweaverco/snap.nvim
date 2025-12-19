@@ -286,15 +286,11 @@ All commands can be run in normal or visual mode.
 > and Neovim's clipboard support being properly configured.
 >
 > For Linux systems, ensure that you have
-> `xclip` installed for clipboard operations to work.
+> `wl-clip` or `xclip` installed for clipboard operations to work.
 >
 > On macOS, clipboard support is typically available by default.
 >
 > On Windows, clipboard support is also generally available by default.
-
-> [!NOTE]
-> We're working on adding streamlined support for
-> all major operating systems via the backend binary instead of shelling out.
 
 ### Snap command
 

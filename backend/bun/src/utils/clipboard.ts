@@ -1,149 +1,167 @@
 import { Buffer } from "buffer";
-import { execSync } from "child_process";
-import { JSONRequestType, type NodeHTMLToImageBuffer } from ".";
+import { spawn } from "bun";
+import { unlinkSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
-/**
- * Returns the appropriate system clipboard command for copying image/png data
- * based on the operating system.
- * NOTE ON EXTERNAL TOOLS:
- * - macOS: This uses 'pngpaste'.
- *   Install via Homebrew:
- *   https://github.com/jcsalterego/pngpaste
- * - Windows: This uses 'nircmd' with the 'clipboard setimagefromstdin' command.
- *   Download the utility here:
- *   https://www.nirsoft.net/utils/nircmd.html
- * - Linux (X11): This uses 'xclip', which is a standard Linux utility.
- * * @returns {string | null} The clipboard command or null if unsupported OS.
- */
-const getSystemClipboardCommand = (type: JSONRequestType): string | null => {
-  const isLinux = process.platform === "linux";
-  const isX11 = process.env.DISPLAY !== undefined;
-  const isWayland = process.env.WAYLAND_DISPLAY !== undefined;
-  const isMac = process.platform === "darwin";
-  const isWindows = process.platform === "win32";
+type MimeType =
+  | "text/plain"
+  | "text/html"
+  | "image/png"
+  | "image/jpeg"
+  | "application/json";
 
-  let targetType = "image/png";
-
-  switch (type) {
-    case JSONRequestType.CodeImageGeneration:
-      targetType = "image/png";
-      break;
-    case JSONRequestType.CodeHTMLGeneration:
-      targetType = "text/html";
-      break;
-    default:
-      targetType = "image/png";
-      break;
-  }
-
-  if (isLinux) {
-    if (isX11) {
-      // xclip -t image/png registers the raw buffer as a PNG image,
-      // not text.
-      return "xclip -selection clipboard -t " + targetType;
-    }
-    if (isWayland) {
-      // Wayland support would typically require
-      // 'wl-copy --type image/png'
-      // but wl-copy clears the clipboard when the process exits,
-      // so it's not suitable for this use case.
-      return "xclip -selection clipboard -t " + targetType;
-    }
-  }
-  if (isMac) {
-    // pngpaste reads the PNG data from stdin ('-').
-    if (targetType === "text/html") {
-      return "pbcopy";
-    }
-    return "pngpaste -";
-  }
-  if (isWindows) {
-    if (targetType === "text/html") {
-      return "clip";
-    }
-    // nircmd copies the image data from stdin and sets it on the clipboard.
-    // The path to nircmd.exe needs to be in the system PATH.
-    return "nircmd clipboard setimagefromstdin";
-  }
+const getLinuxTool = (): string | null => {
+  const isWayland = !!process.env.WAYLAND_DISPLAY;
+  if (isWayland && Bun.which("wl-copy")) return "wayland";
+  if (Bun.which("xsel")) return "xsel";
+  if (Bun.which("xclip")) return "xclip";
   return null;
 };
 
-export const isSystemClipboardCommandAvailable = (type: JSONRequestType): {
-  success: boolean;
-  errorMessage?: string;
-} => {
-  const command = getSystemClipboardCommand(type);
-  if (!command) {
-    return {
-      success: false,
-      errorMessage: `Unsupported OS for copying images.\n` +
-        `Detected OS: " + ${process.platform}`,
-    };
-  }
-  const commandName = command.split(" ")[0];
-  try {
-    execSync(
-      process.platform === "win32"
-        ? `where ${commandName}`
-        : `which ${commandName}`,
-    );
-    return { success: true };
-  } catch {
-    return {
-      success: false,
-      errorMessage:
-        `Required clipboard command-line tool not found: ${commandName}`,
-    };
-  }
-};
+export const Clipboard = {
+  /**
+   * Reads from the clipboard.
+   * Returns a Buffer for binary data or a string for text-based types.
+   */
+  async read(mimeType: MimeType = "text/plain"): Promise<Buffer | string> {
+    const platform = process.platform;
+    let cmd: string[] = [];
 
-const convertToBuffer = (
-  input: NodeHTMLToImageBuffer,
-): Buffer<ArrayBufferLike> => {
-  if (typeof input === "string") {
-    return Buffer.from(input);
-  }
-  if (Array.isArray(input)) {
-    return Buffer.concat(
-      input.map((item) => typeof item === "string" ? Buffer.from(item) : item),
-    );
-  }
-  return input;
-};
+    if (platform === "darwin") {
+      // macOS uses 'osascript' or 'pbpaste'. pbpaste is limited,
+      // so for images we use a small AppleScript snippet.
+      if (mimeType.startsWith("image/")) {
+        cmd = ["osascript", "-e", `get the clipboard as «class PNGf»`];
+      } else {
+        cmd = ["pbpaste"];
+      }
+    } else if (platform === "win32") {
+      if (mimeType.startsWith("image/")) {
+        cmd = [
+          "powershell.exe",
+          "-NoProfile",
+          "-Command",
+          "$img = Get-Clipboard -Image; if($img) { $ms = New-Object System.IO.MemoryStream; $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); $ms.ToArray() }",
+        ];
+      } else {
+        cmd = [
+          "powershell.exe",
+          "-NoProfile",
+          "-Command",
+          "Get-Clipboard -Raw",
+        ];
+      }
+    } else if (platform === "linux") {
+      const tool = await getLinuxTool();
+      if (tool === "wayland") {
+        cmd = ["wl-paste", "--type", mimeType, "--no-newline"];
+      } else if (tool === "xclip") {
+        cmd = ["xclip", "-selection", "clipboard", "-t", mimeType, "-out"];
+      } else {
+        // xsel doesn't handle non-text targets well
+        cmd = ["xsel", "--clipboard", "--output"];
+      }
+    }
 
-/**
- * Copies the given input as image/png to the system clipboard using the
- * appropriate external command-line tool.
- * @param {string | (string | Buffer<ArrayBufferLike>)[] | Buffer<ArrayBufferLike>
- * } input - The input (assumed to be PNG byte data) to copy to the clipboard.
- * @returns {boolean} True if the operation was successful, false otherwise.
- */
-export const copyBufferToClipboard = (
-  input: NodeHTMLToImageBuffer,
-  type: JSONRequestType,
-): { success: boolean; errorMessage?: string } => {
-  const command = getSystemClipboardCommand(type);
-  if (!command) {
-    return {
-      success: false,
-      errorMessage: `Unsupported OS for copying images.\n` +
-        `Detected OS: " + ${process.platform}`,
-    };
-  }
-  try {
-    const inputBuffer = convertToBuffer(input);
-    // Use execSync with the 'input' option to
-    // pipe the Buffer to the command's stdin
-    execSync(command, {
-      input: inputBuffer,
-      // hide the command's output
-      stdio: "inherit",
-    });
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      errorMessage: (error as Error).message || String(error),
-    };
-  }
+    const proc = spawn(cmd);
+    const buffer = await new Response(proc.stdout).arrayBuffer();
+    const result = Buffer.from(buffer);
+
+    return mimeType.startsWith("image/") ? result : result.toString("utf-8");
+  },
+
+  async write(
+    data: string | Buffer | (string | Buffer)[],
+    mimeType: MimeType = "text/plain",
+  ): Promise<void> {
+    const platform = process.platform;
+    const input =
+      typeof data === "string"
+        ? Buffer.from(data, "utf-8")
+        : Buffer.concat(
+            Array.isArray(data)
+              ? data.map((item) =>
+                  typeof item === "string" ? Buffer.from(item, "utf-8") : item,
+                )
+              : [data],
+          );
+
+    // --- macOS Implementation ---
+    if (platform === "darwin") {
+      if (mimeType.startsWith("image/")) {
+        const tempFile = join(tmpdir(), `clip_${Date.now()}.png`);
+        try {
+          writeFileSync(tempFile, input);
+          const script = `set the clipboard to (read (POSIX file "${tempFile}") as «class PNGf»)`;
+          const proc = spawn(["osascript", "-e", script]);
+          await proc.exited;
+        } finally {
+          try {
+            unlinkSync(tempFile);
+          } catch {
+            // Ignore cleanup errors
+          }
+        }
+        return;
+      }
+
+      const proc = spawn(["pbcopy"], { stdin: input });
+      await proc.exited;
+      return;
+    }
+
+    // --- Windows Implementation ---
+    if (platform === "win32") {
+      if (mimeType.startsWith("image/")) {
+        // We pass the bytes via Base64 to PowerShell to avoid encoding issues with raw STDIN
+        const b64 = input.toString("base64");
+        const psCommand = `
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing;
+          $bytes = [System.Convert]::FromBase64String('${b64}');
+          $ms = New-Object System.IO.MemoryStream($bytes, 0, $bytes.Length);
+          $img = [System.Drawing.Image]::FromStream($ms);
+          [System.Windows.Forms.Clipboard]::SetImage($img);
+        `;
+        const proc = spawn([
+          "powershell.exe",
+          "-NoProfile",
+          "-Command",
+          psCommand,
+        ]);
+        await proc.exited;
+        return;
+      }
+
+      const proc = spawn(
+        ["powershell.exe", "-NoProfile", "-Command", "$input | Set-Clipboard"],
+        { stdin: input },
+      );
+      await proc.exited;
+      return;
+    }
+
+    // --- Linux Implementation ---
+    if (platform === "linux") {
+      const tool = getLinuxTool();
+      if (tool === "wayland") {
+        // We do NOT await .exited here. wl-copy must remain running
+        // in the background to serve the clipboard content.
+        spawn(["wl-copy", "--type", mimeType], {
+          stdin: input,
+          stdout: "ignore",
+          stderr: "ignore",
+          // Unref allows the parent process to exit while wl-copy stays alive
+        }).unref();
+        return;
+      }
+
+      const cmd =
+        tool === "xclip"
+          ? ["xclip", "-selection", "clipboard", "-t", mimeType, "-in"]
+          : ["xsel", "--clipboard", "--input"];
+
+      await spawn(cmd, { stdin: input }).exited;
+    }
+  },
 };

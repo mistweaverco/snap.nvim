@@ -4,9 +4,8 @@ import Handlebars from "handlebars";
 import nodeHtmlToImage from "node-html-to-image";
 import defaultTemplatePath from "../../../templates/default.hbs" with { type: "file" };
 import {
-  copyBufferToClipboard,
+  Clipboard,
   getJSONFromStdin,
-  isSystemClipboardCommandAvailable,
   type JSONObjectHTMLSuccessRequest,
   type JSONObjectImageSuccessRequest,
   JSONRequestType,
@@ -21,14 +20,6 @@ const main = async () => {
       success: false,
       error: jsonPayload.error,
     });
-    return;
-  }
-
-  const clipboardCheck = isSystemClipboardCommandAvailable(
-    jsonPayload.data.type,
-  );
-  if (!clipboardCheck.success) {
-    console.error(clipboardCheck.errorMessage);
     return;
   }
 
@@ -82,7 +73,7 @@ const main = async () => {
   }
 
   if (buffer && json.data.toClipboard) {
-    copyBufferToClipboard(buffer, json.data.type);
+    Clipboard.write(buffer, "image/png");
   }
 
   if (
