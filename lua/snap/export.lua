@@ -49,23 +49,22 @@ local function run_backend_export(opts, export_type, success_message)
       Logger.debug("Payload callback invoked with " .. #(jsonPayload.data.code or {}) .. " lines")
     end
 
-    local system_args = nil
+    local system_args = { BACKEND_BIN_PATH }
     local cwd = nil
 
     if conf.debug ~= nil then
-      cwd = payload.get_absolute_plugin_path("backend", conf.debug.backend)
-      if not vim.fn.isdirectory(cwd) then
-        error("Backend directory not found: " .. cwd)
-      end
-      -- Try to find backend bin in PATH
-      local backend_bin_path = vim.fn.exepath(conf.debug.backend)
-      if backend_bin_path == "" then
-        error(conf.debug.backend .. " executable not found in PATH")
-      else
+      if conf.debug.backend then
+        local backend_bin_path = vim.fn.exepath(conf.debug.backend)
+        if backend_bin_path == "" then
+          error(conf.debug.backend .. " executable not found in PATH")
+        end
+        cwd = payload.get_absolute_plugin_path("backend", conf.debug.backend)
+        if not vim.fn.isdirectory(cwd) then
+          error("Backend directory not found: " .. cwd)
+        end
+        Logger.debug("Using debug backend at: " .. backend_bin_path .. " with cwd: " .. cwd)
         system_args = { backend_bin_path, "run", "." }
       end
-    else
-      system_args = { BACKEND_BIN_PATH }
     end
 
     local jsonPayloadStr = vim.fn.json_encode(jsonPayload)
