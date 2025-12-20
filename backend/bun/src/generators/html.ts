@@ -18,6 +18,24 @@ export const HandlebarsGenerator = (
 };
 
 /**
+ * Escapes HTML special characters in a string
+ * @param str - Input string
+ * @returns Escaped string
+ */
+const escapeHTML = (str: string): string => {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/{/g, "&#123;")
+    .replace(/}/g, "&#125;");
+};
+
+const unescapeHTML = (str: string): string => {
+  return str.replace(/&#123;/g, "{").replace(/&#125;/g, "}");
+};
+
+/**
  * Generates HTML from JSON representation of code snippet
  * and writes it to specified filepath.
  * @param json - JSON payload from the request
@@ -30,10 +48,7 @@ export const HTMLGenerator = async (
     .map((line) => {
       return line
         .map((segment) => {
-          let segmentHTML = segment.text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
+          let segmentHTML = escapeHTML(segment.text);
           if (segment.bold) {
             segmentHTML = `<b>${segmentHTML}</b>`;
           }
@@ -53,7 +68,7 @@ export const HTMLGenerator = async (
         : `<div class="code-line">${line}</div>`,
     )
     .join("\n");
-  const template = await Template(html, json);
+  const template = await Template(unescapeHTML(html), json);
   fs.writeFileSync(json.data.filepath, template, {
     encoding: "utf-8",
   });
