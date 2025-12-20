@@ -138,6 +138,36 @@ function M.collect_all_highlights(info)
     end
   end
 
+  -- Priority 1: Semantic tokens (if in semantic_tokens field) - collect before extmarks
+  -- Semantic tokens from LSP have explicit priorities (typically 125-127)
+  if info.semantic_tokens and #info.semantic_tokens > 0 then
+    for _, token in ipairs(info.semantic_tokens) do
+      local hl_group = token.hl_group or (token.opts and token.opts.hl_group)
+      local priority = token.priority or (token.opts and token.opts.priority)
+
+      if hl_group and priority then
+        -- Check if we already have this highlight group
+        local found_index = nil
+        for i, hl in ipairs(highlights) do
+          if hl.hl_group == hl_group then
+            found_index = i
+            break
+          end
+        end
+
+        if found_index then
+          -- Replace with semantic token version if it has higher priority
+          if priority > (highlights[found_index].priority or 0) then
+            highlights[found_index] = { hl_group = hl_group, priority = priority }
+          end
+        else
+          -- Add new semantic token highlight
+          table.insert(highlights, { hl_group = hl_group, priority = priority })
+        end
+      end
+    end
+  end
+
   -- Priority 1: Extmarks with hl_group/virt_text (explicit priority) - collect LAST
   -- This includes: diagnostics, LSP semantic tokens, treesitter (default priority 100),
   -- plugins (git signs, indent guides, rainbow delimiters, todo-comments, etc.)
@@ -155,10 +185,12 @@ function M.collect_all_highlights(info)
       if hl_group then
         -- Priority handling for extmarks:
         -- - Treesitter extmarks: use priority 100 (or explicit if set and > 100)
+        -- - Semantic tokens (LSP): use their explicit priority (typically 125-127)
         -- - Other extmarks: should have highest precedence to override treesitter/syntax
         --   Higher priority value = higher precedence
         local ns = tostring(extmark.ns or "")
         local is_treesitter = ns:match("^treesitter") or ns:match("^nvim%-treesitter") or ns == "TS"
+        local is_semantic_token = ns:match("semantic") or (hl_group and hl_group:match("^@lsp"))
 
         -- Get explicit priority from opts if available
         local extmark_priority = nil
@@ -172,6 +204,10 @@ function M.collect_all_highlights(info)
         if is_treesitter then
           -- Treesitter extmarks: default to 100, but use explicit if it's higher
           priority = extmark_priority or 100
+        elseif is_semantic_token then
+          -- Semantic tokens: use their explicit priority (typically 125-127)
+          -- If no explicit priority, use high precedence to override treesitter
+          priority = extmark_priority or 200
         else
           -- Non-treesitter extmarks: should override treesitter (100) and syntax (50)
           -- If explicit priority is <= 100 (lower precedence), override to 200 (higher precedence)
@@ -231,33 +267,65 @@ function M.get_hl_at_pos(winnr, bufnr, row, col, view_state, range)
   view.scroll_into_view(winnr, row, col, range)
 
   -- scroll_into_view already waits for scroll and redraw to complete.
-  -- Now we need to wait a bit more for semantic tokens/LSP highlights to be applied.
-  -- Use a simple blocking wait with multiple event loop ticks.
-  local wait_done = false
-  vim.schedule(function()
+  -- Now we need to wait for semantic tokens/LSP highlights to be applied.
+  -- Semantic tokens are computed asynchronously by LSP, so we may need to retry.
+  local result = nil
+  local max_retries = 3
+  local retry_count = 0
+
+  while retry_count < max_retries do
+    -- Wait for multiple event loop ticks to ensure LSP highlights are ready
+    local wait_done = false
     vim.schedule(function()
       vim.schedule(function()
-        wait_done = true
+        vim.schedule(function()
+          wait_done = true
+        end)
       end)
     end)
-  end)
-  -- Wait for multiple event loop ticks to ensure LSP highlights are ready
-  vim.wait(30, function()
-    return wait_done
-  end, 1)
+    vim.wait(50, function()
+      return wait_done
+    end, 1)
 
-  -- Now inspect synchronously - highlights should be ready
-  local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
-  if not ok or not info then
-    view.restore_view(winnr, row, view_state)
-    return nil
+    -- Inspect highlights - always get fresh data
+    local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
+    if not ok or not info then
+      view.restore_view(winnr, row, view_state)
+      return nil
+    end
+
+    -- Collect all highlights at this position - always use latest inspection
+    local highlights = M.collect_all_highlights(info)
+
+    -- Merge highlights by priority - always merge latest data
+    local merged = M.merge_highlights(highlights)
+
+    -- Only update result if we got a valid merged highlight
+    if merged then
+      result = merged
+    end
+
+    -- Check if semantic tokens are present in the latest inspection
+    local has_semantic_tokens = false
+    if info.extmarks then
+      for _, extmark in ipairs(info.extmarks) do
+        local ns = tostring(extmark.ns or "")
+        if ns:match("semantic_tokens") then
+          has_semantic_tokens = true
+          break
+        end
+      end
+    end
+
+    -- If we have semantic tokens or this is our last retry, we're done
+    if has_semantic_tokens or retry_count == max_retries - 1 then
+      break
+    end
+
+    -- No semantic tokens yet, retry after waiting a bit more
+    retry_count = retry_count + 1
+    vim.uv.sleep(0.01) -- 10ms additional wait
   end
-
-  -- Collect all highlights at this position
-  local highlights = M.collect_all_highlights(info)
-
-  -- Merge highlights by priority
-  local result = M.merge_highlights(highlights)
 
   view.restore_view(winnr, row, view_state)
   return result
