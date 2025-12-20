@@ -52,8 +52,9 @@ end
 
 ---Generate backend JSON payload from current buffer
 ---@param opts SnapExportOptions|nil Export options
----@return SnapPayload JSON payload for backend
-function M.get_backend_payload_from_buf(opts)
+---@param callback function|nil Optional callback function(payload) - if provided, processing is async
+---@return SnapPayload|nil JSON payload for backend (nil if callback is provided)
+function M.get_backend_payload_from_buf(opts, callback)
   opts = opts or {}
 
   local user_config = Config.get()
@@ -84,9 +85,14 @@ function M.get_backend_payload_from_buf(opts)
       templateFilepath = user_config.templateFilepath or nil,
       transparent = true,
       minWidth = 0,
-      type = opts.type or types.SnapPayloadType.image,
+      type = (opts and opts.type) or types.SnapPayloadType.image,
     },
   }
+
+  -- Ensure type is always set (defensive check)
+  if not snap_payload.data.type then
+    snap_payload.data.type = types.SnapPayloadType.image
+  end
 
   -- Calculate the longest line length (in characters) for min width calculation
   -- based on the selection or entire buffer
@@ -116,29 +122,83 @@ function M.get_backend_payload_from_buf(opts)
   local win = vim.api.nvim_get_current_win()
   local ui_block_releaser = UIBlock.show_loading_locked("Fetching highlights...")
 
-  for row, line in ipairs(lines) do
+  -- Process highlights asynchronously in batches to avoid blocking UI
+  local BATCH_SIZE = 50 -- Process 50 characters before yielding
+
+  -- Process a single line asynchronously
+  local function process_line_async(row, line, on_complete)
     ---@type table<SnapPayloadDataCodeItem|nil>
     local line_items = {}
     local col = 0
     local current_hl_key = nil
     local current_hl_attrs = nil
     local current_segment = ""
-    while col < #line do
-      local ch = line:sub(col + 1, col + 1)
-      local hl_attrs = highlights_collection.get_hl_at(win, hl_map, bufnr, row - 1, col, view, opts.range)
-      -- If no highlight attributes, create a default one with "Normal"
-      if not hl_attrs then
-        hl_attrs = {
-          hl_group = "Normal",
-          fg = DEFAULT_FG,
-          bg = DEFAULT_BG,
-          bold = false,
-          italic = false,
-          underline = false,
-        }
+
+    local function process_batch()
+      local batch_count = 0
+      while col < #line and batch_count < BATCH_SIZE do
+        local ch = line:sub(col + 1, col + 1)
+        local hl_attrs = highlights_collection.get_hl_at(win, hl_map, bufnr, row - 1, col, view, opts.range)
+        -- If no highlight attributes, create a default one with "Normal"
+        if not hl_attrs then
+          hl_attrs = {
+            hl_group = "Normal",
+            fg = DEFAULT_FG,
+            bg = DEFAULT_BG,
+            bold = false,
+            italic = false,
+            underline = false,
+          }
+        end
+        local hl_key = highlights_utils.hl_attrs_to_key(hl_attrs)
+        if hl_key ~= current_hl_key then
+          if current_segment ~= "" then
+            ---@type SnapPayloadDataCodeItem|nil
+            local snap_payload_data_code_item = nil
+            local hl_name = "Normal"
+            if current_hl_attrs and current_hl_attrs.hl_group then
+              hl_name = current_hl_attrs.hl_group
+              snap_payload_data_code_item = get_snap_payload_data_code_item(current_hl_attrs, current_segment)
+            end
+            if snap_payload_data_code_item then
+              table.insert(line_items, {
+                fg = snap_payload_data_code_item.fg,
+                bg = snap_payload_data_code_item.bg,
+                text = current_segment,
+                bold = snap_payload_data_code_item.bold,
+                italic = snap_payload_data_code_item.italic,
+                underline = snap_payload_data_code_item.underline,
+                hl_name = hl_name,
+              })
+            else
+              table.insert(line_items, {
+                fg = DEFAULT_FG,
+                bg = DEFAULT_BG,
+                text = current_segment,
+                bold = false,
+                italic = false,
+                underline = false,
+                hl_name = hl_name,
+              })
+            end
+          end
+          current_segment = ch
+          current_hl_key = hl_key
+          current_hl_attrs = hl_attrs
+        else
+          current_segment = current_segment .. ch
+        end
+        col = col + 1
+        batch_count = batch_count + 1
       end
-      local hl_key = highlights_utils.hl_attrs_to_key(hl_attrs)
-      if hl_key ~= current_hl_key then
+
+      if col < #line then
+        -- More characters to process, yield to event loop
+        vim.schedule(function()
+          process_batch()
+        end)
+      else
+        -- Line complete, finalize segment
         if current_segment ~= "" then
           ---@type SnapPayloadDataCodeItem|nil
           local snap_payload_data_code_item = nil
@@ -169,54 +229,173 @@ function M.get_backend_payload_from_buf(opts)
             })
           end
         end
-        current_segment = ch
-        current_hl_key = hl_key
-        current_hl_attrs = hl_attrs
-      else
-        current_segment = current_segment .. ch
-      end
-      col = col + 1
-    end
-    if current_segment ~= "" then
-      ---@type SnapPayloadDataCodeItem|nil
-      local snap_payload_data_code_item = nil
-      local hl_name = "Normal"
-      if current_hl_attrs and current_hl_attrs.hl_group then
-        hl_name = current_hl_attrs.hl_group
-        snap_payload_data_code_item = get_snap_payload_data_code_item(current_hl_attrs, current_segment)
-      end
-      if snap_payload_data_code_item then
-        table.insert(line_items, {
-          fg = snap_payload_data_code_item.fg,
-          bg = snap_payload_data_code_item.bg,
-          text = current_segment,
-          bold = snap_payload_data_code_item.bold,
-          italic = snap_payload_data_code_item.italic,
-          underline = snap_payload_data_code_item.underline,
-          hl_name = hl_name,
-        })
-      else
-        table.insert(line_items, {
-          fg = DEFAULT_FG,
-          bg = DEFAULT_BG,
-          text = current_segment,
-          bold = false,
-          italic = false,
-          underline = false,
-          hl_name = hl_name,
-        })
+        on_complete(line_items)
       end
     end
-    if opts.range then
-      if row >= opts.range.start_line and row <= opts.range.end_line then
+
+    -- Start processing
+    process_batch()
+  end
+
+  -- If callback is provided, use async processing
+  if callback then
+    -- Handle empty buffer case
+    if #lines == 0 then
+      ui_block_releaser()
+      vim.schedule(function()
+        callback(snap_payload)
+      end)
+      return nil
+    end
+
+    -- Process all lines asynchronously
+    local current_line_idx = 1
+    local function process_next_line()
+      if current_line_idx > #lines then
+        -- All lines processed
+        ui_block_releaser()
+        -- Ensure payload is complete and has all required fields
+        if not snap_payload then
+          error("Payload is nil")
+        elseif not snap_payload.data then
+          error("Payload.data is nil")
+        elseif not snap_payload.data.type then
+          -- Ensure type is set if it's missing
+          snap_payload.data.type = opts.type or types.SnapPayloadType.image
+        end
+        -- Call callback in next event loop tick to ensure all async operations are complete
+        vim.schedule(function()
+          callback(snap_payload)
+        end)
+        return
+      end
+
+      local row = current_line_idx
+      local line = lines[row]
+      process_line_async(row, line, function(line_items)
+        if opts.range then
+          if row >= opts.range.start_line and row <= opts.range.end_line then
+            table.insert(snap_payload.data.code, line_items)
+          end
+        else
+          table.insert(snap_payload.data.code, line_items)
+        end
+
+        -- Process next line
+        current_line_idx = current_line_idx + 1
+        vim.schedule(function()
+          process_next_line()
+        end)
+      end)
+    end
+
+    -- Start async processing
+    process_next_line()
+    return nil
+  else
+    -- Synchronous processing (blocks UI, but maintains backward compatibility)
+    for row, line in ipairs(lines) do
+      ---@type table<SnapPayloadDataCodeItem|nil>
+      local line_items = {}
+      local col = 0
+      local current_hl_key = nil
+      local current_hl_attrs = nil
+      local current_segment = ""
+      while col < #line do
+        local ch = line:sub(col + 1, col + 1)
+        local hl_attrs = highlights_collection.get_hl_at(win, hl_map, bufnr, row - 1, col, view, opts.range)
+        -- If no highlight attributes, create a default one with "Normal"
+        if not hl_attrs then
+          hl_attrs = {
+            hl_group = "Normal",
+            fg = DEFAULT_FG,
+            bg = DEFAULT_BG,
+            bold = false,
+            italic = false,
+            underline = false,
+          }
+        end
+        local hl_key = highlights_utils.hl_attrs_to_key(hl_attrs)
+        if hl_key ~= current_hl_key then
+          if current_segment ~= "" then
+            ---@type SnapPayloadDataCodeItem|nil
+            local snap_payload_data_code_item = nil
+            local hl_name = "Normal"
+            if current_hl_attrs and current_hl_attrs.hl_group then
+              hl_name = current_hl_attrs.hl_group
+              snap_payload_data_code_item = get_snap_payload_data_code_item(current_hl_attrs, current_segment)
+            end
+            if snap_payload_data_code_item then
+              table.insert(line_items, {
+                fg = snap_payload_data_code_item.fg,
+                bg = snap_payload_data_code_item.bg,
+                text = current_segment,
+                bold = snap_payload_data_code_item.bold,
+                italic = snap_payload_data_code_item.italic,
+                underline = snap_payload_data_code_item.underline,
+                hl_name = hl_name,
+              })
+            else
+              table.insert(line_items, {
+                fg = DEFAULT_FG,
+                bg = DEFAULT_BG,
+                text = current_segment,
+                bold = false,
+                italic = false,
+                underline = false,
+                hl_name = hl_name,
+              })
+            end
+          end
+          current_segment = ch
+          current_hl_key = hl_key
+          current_hl_attrs = hl_attrs
+        else
+          current_segment = current_segment .. ch
+        end
+        col = col + 1
+      end
+      if current_segment ~= "" then
+        ---@type SnapPayloadDataCodeItem|nil
+        local snap_payload_data_code_item = nil
+        local hl_name = "Normal"
+        if current_hl_attrs and current_hl_attrs.hl_group then
+          hl_name = current_hl_attrs.hl_group
+          snap_payload_data_code_item = get_snap_payload_data_code_item(current_hl_attrs, current_segment)
+        end
+        if snap_payload_data_code_item then
+          table.insert(line_items, {
+            fg = snap_payload_data_code_item.fg,
+            bg = snap_payload_data_code_item.bg,
+            text = current_segment,
+            bold = snap_payload_data_code_item.bold,
+            italic = snap_payload_data_code_item.italic,
+            underline = snap_payload_data_code_item.underline,
+            hl_name = hl_name,
+          })
+        else
+          table.insert(line_items, {
+            fg = DEFAULT_FG,
+            bg = DEFAULT_BG,
+            text = current_segment,
+            bold = false,
+            italic = false,
+            underline = false,
+            hl_name = hl_name,
+          })
+        end
+      end
+      if opts.range then
+        if row >= opts.range.start_line and row <= opts.range.end_line then
+          table.insert(snap_payload.data.code, line_items)
+        end
+      else
         table.insert(snap_payload.data.code, line_items)
       end
-    else
-      table.insert(snap_payload.data.code, line_items)
     end
+    ui_block_releaser()
+    return snap_payload
   end
-  ui_block_releaser()
-  return snap_payload
 end
 
 M.get_absolute_plugin_path = get_absolute_plugin_path

@@ -30,67 +30,91 @@ end
 ---@param success_message string Success message format string (with %s for filepath)
 local function run_backend_export(opts, export_type, success_message)
   opts = opts or {}
-  local jsonPayload = vim.fn.json_encode(payload.get_backend_payload_from_buf({
+  local conf = Config.get()
+
+  -- Use async callback to avoid blocking UI
+  payload.get_backend_payload_from_buf({
     range = opts.range,
     filepath = opts.filepath,
     type = export_type,
-  }))
-  local conf = Config.get()
-  local system_args = nil
-
-  local cwd = nil
-
-  if conf.debug ~= nil then
-    cwd = payload.get_absolute_plugin_path("backend", conf.debug.backend)
-    if not vim.fn.isdirectory(cwd) then
-      error("Backend directory not found: " .. cwd)
+  }, function(jsonPayload)
+    -- Validate payload structure
+    if not jsonPayload or not jsonPayload.data or not jsonPayload.data.type then
+      Logger.error("Invalid payload structure received: " .. vim.inspect(jsonPayload))
+      return
     end
-    -- Try to find backend bin in PATH
-    local backend_bin_path = vim.fn.exepath(conf.debug.backend)
-    if backend_bin_path == "" then
-      error(conf.debug.backend .. " executable not found in PATH")
+
+    -- Debug: Log that callback was invoked
+    if conf.debug then
+      Logger.debug("Payload callback invoked with " .. #(jsonPayload.data.code or {}) .. " lines")
+    end
+
+    local system_args = nil
+    local cwd = nil
+
+    if conf.debug ~= nil then
+      cwd = payload.get_absolute_plugin_path("backend", conf.debug.backend)
+      if not vim.fn.isdirectory(cwd) then
+        error("Backend directory not found: " .. cwd)
+      end
+      -- Try to find backend bin in PATH
+      local backend_bin_path = vim.fn.exepath(conf.debug.backend)
+      if backend_bin_path == "" then
+        error(conf.debug.backend .. " executable not found in PATH")
+      else
+        system_args = { backend_bin_path, "run", "." }
+      end
     else
-      system_args = { backend_bin_path, "run", "." }
+      system_args = { BACKEND_BIN_PATH }
     end
-  else
-    system_args = { BACKEND_BIN_PATH }
-  end
 
-  local system_obj = vim.system(
-    system_args,
-    {
-      timeout = conf.timeout,
-      stdin = true,
-      cwd = cwd,
-      env = vim.fn.environ(),
-      text = true,
-    },
-    vim.schedule_wrap(function(result)
-      if result.stdout and result.stdout ~= "" then
-        local ok, res = pcall(vim.fn.json_decode, result.stdout)
-        if not ok then
-          Logger.warn("Failed to decode JSON output: " .. tostring(res))
-          return
-        end
-        if res.success then
-          Logger.info(string.format(success_message, tostring(res.data.filepath)))
-        else
-          print("Backend error when exporting failed: " .. vim.inspect(res))
-        end
-      end
-      if result.stderr and result.stderr ~= "" then
-        print("Error exporting: " .. vim.inspect(result.stderr))
-      end
-      if result.code ~= 0 then
-        print("Process exited with non-zero code: " .. tostring(result.code))
-      end
-    end)
-  )
+    local jsonPayloadStr = vim.fn.json_encode(jsonPayload)
 
-  -- Write JSON payload to stdin
-  system_obj:write(jsonPayload)
-  -- Close stdin to signal end of input
-  system_obj:write(nil)
+    -- Validate payload has content
+    if not jsonPayload.data.code or #jsonPayload.data.code == 0 then
+      Logger.warn("Payload has no code content - buffer might be empty")
+    end
+
+    local system_obj = vim.system(
+      system_args,
+      {
+        timeout = conf.timeout,
+        stdin = true,
+        cwd = cwd,
+        env = vim.fn.environ(),
+        text = true,
+      },
+      vim.schedule_wrap(function(result)
+        if result.stdout and result.stdout ~= "" then
+          local ok, res = pcall(vim.fn.json_decode, result.stdout)
+          if not ok then
+            Logger.warn("Failed to decode JSON output: " .. tostring(res))
+            return
+          end
+          if res.success then
+            Logger.info(string.format(success_message, tostring(res.data.filepath)))
+          else
+            print("Backend error when exporting failed: " .. vim.inspect(res))
+          end
+        end
+        if result.stderr and result.stderr ~= "" then
+          print("Error exporting: " .. vim.inspect(result.stderr))
+        end
+        if result.code ~= 0 then
+          print("Process exited with non-zero code: " .. tostring(result.code))
+        end
+      end)
+    )
+
+    -- Write JSON payload to stdin immediately after system starts
+    if system_obj then
+      system_obj:write(jsonPayloadStr)
+      -- Close stdin to signal end of input
+      system_obj:write(nil)
+    else
+      Logger.error("Failed to create system process")
+    end
+  end)
 end
 
 ---Export current buffer to RTF
