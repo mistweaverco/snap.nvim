@@ -19,6 +19,7 @@ export const HandlebarsGenerator = (
 
 /**
  * Escapes HTML special characters in a string
+ * So it does not break our HTML and Handlebars templates
  * @param str - Input string
  * @returns Escaped string
  */
@@ -29,10 +30,6 @@ const escapeHTML = (str: string): string => {
     .replace(/>/g, "&gt;")
     .replace(/{/g, "&#123;")
     .replace(/}/g, "&#125;");
-};
-
-const unescapeHTML = (str: string): string => {
-  return str.replace(/&#123;/g, "{").replace(/&#125;/g, "}");
 };
 
 /**
@@ -68,7 +65,7 @@ export const HTMLGenerator = async (
         : `<div class="code-line">${line}</div>`,
     )
     .join("\n");
-  const template = await Template(unescapeHTML(html), json);
+  const template = await Template(html, json);
   fs.writeFileSync(json.data.filepath, template, {
     encoding: "utf-8",
   });
