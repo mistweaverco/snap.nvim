@@ -26,7 +26,7 @@ M.defaults = {
   },
   font_settings = {
     size = 14, -- Default font size for the screenshot
-    line_height = 0.8, -- Default line height for the screenshot
+    line_height = 12, -- Default line height for the screenshot
     fonts = {
       default = {
         name = "FiraCode Nerd Font", -- Default font name for the screenshot

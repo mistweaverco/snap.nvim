@@ -1,5 +1,5 @@
 local M = {}
-local IS_WINDOWS = vim.loop.os_uname().version:match("Windows")
+local IS_WINDOWS = vim.uv.os_uname().version:match("Windows")
 
 M.join_paths = function(...)
   local paths = { ... }
