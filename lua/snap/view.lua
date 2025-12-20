@@ -5,7 +5,7 @@ local M = {}
 ---@param row number Line number (0-based)
 ---@param col number Column number (0-based)
 ---@param range SnapVisualRange|nil Range to consider
----@return nil
+---@return boolean Whether scrolling occurred (true) or content was already in view (false)
 function M.scroll_into_view(winnr, row, col, range)
   local nvim_cursor = vim.api.nvim_win_get_cursor(winnr)
   local height = vim.api.nvim_win_get_height(winnr)
@@ -13,30 +13,30 @@ function M.scroll_into_view(winnr, row, col, range)
   -- if in view, no need to scroll
   if row >= (nvim_cursor[1] - 1) and row < (nvim_cursor[1] - 1 + height) then
     vim.cmd("redraw")
-    return
+    return false
   end
   if range then
     -- check if range is already in view
     -- if in view, no need to scroll
     if range.start_line >= (nvim_cursor[1] - 1) and range.end_line < (nvim_cursor[1] - 1 + height) then
       vim.cmd("redraw")
-      return
+      return false
     end
   end
   -- scroll so that row is the top most line
   vim.api.nvim_win_set_cursor(winnr, { row + 1, col })
   vim.cmd("redraw")
+  return true
 end
 
----Scroll back if at last row of the view
+---Restore view state after scrolling
 ---@param winnr number Window number
----@param row number Line number (0-based)
----@param view vim.fn.winsaveview.ret View state to restore later
+---@param row number Line number (0-based) - used to determine if we scrolled
+---@param view vim.fn.winsaveview.ret View state to restore
 function M.restore_view(winnr, row, view)
-  local rows = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(winnr))
-  if row >= (rows - 1) then
-    vim.fn.winrestview(view)
-  end
+  -- Always restore the view state to return to original position
+  -- This is safe to call even if we didn't scroll (winrestview is idempotent)
+  vim.fn.winrestview(view)
 end
 
 return M

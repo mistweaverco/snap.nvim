@@ -264,70 +264,24 @@ end
 ---@param range SnapVisualRange|nil Range to consider
 ---@return table|nil Merged highlight definition table or nil
 function M.get_hl_at_pos(winnr, bufnr, row, col, view_state, range)
-  view.scroll_into_view(winnr, row, col, range)
+  local did_scroll = view.scroll_into_view(winnr, row, col, range)
 
-  -- scroll_into_view already waits for scroll and redraw to complete.
-  -- Now we need to wait for semantic tokens/LSP highlights to be applied.
-  -- Semantic tokens are computed asynchronously by LSP, so we may need to retry.
-  local result = nil
-  local max_retries = 3
-  local retry_count = 0
-
-  while retry_count < max_retries do
-    -- Wait for multiple event loop ticks to ensure LSP highlights are ready
-    local wait_done = false
-    vim.schedule(function()
-      vim.schedule(function()
-        vim.schedule(function()
-          wait_done = true
-        end)
-      end)
-    end)
-    vim.wait(50, function()
-      return wait_done
-    end, 1)
-
-    -- Inspect highlights - always get fresh data
-    local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
-    if not ok or not info then
-      view.restore_view(winnr, row, view_state)
-      return nil
-    end
-
-    -- Collect all highlights at this position - always use latest inspection
-    local highlights = M.collect_all_highlights(info)
-
-    -- Merge highlights by priority - always merge latest data
-    local merged = M.merge_highlights(highlights)
-
-    -- Only update result if we got a valid merged highlight
-    if merged then
-      result = merged
-    end
-
-    -- Check if semantic tokens are present in the latest inspection
-    local has_semantic_tokens = false
-    if info.extmarks then
-      for _, extmark in ipairs(info.extmarks) do
-        local ns = tostring(extmark.ns or "")
-        if ns:match("semantic_tokens") then
-          has_semantic_tokens = true
-          break
-        end
-      end
-    end
-
-    -- If we have semantic tokens or this is our last retry, we're done
-    if has_semantic_tokens or retry_count == max_retries - 1 then
-      break
-    end
-
-    -- No semantic tokens yet, retry after waiting a bit more
-    retry_count = retry_count + 1
-    vim.uv.sleep(0.01) -- 10ms additional wait
+  -- Inspect highlights synchronously - scroll_into_view already handled redraw
+  local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
+  if not ok or not info then
+    -- Don't restore view here - will be restored at end of processing
+    return nil
   end
 
-  view.restore_view(winnr, row, view_state)
+  -- Collect all highlights at this position
+  local highlights = M.collect_all_highlights(info)
+
+  -- Merge highlights by priority
+  local result = M.merge_highlights(highlights)
+
+  -- Don't restore view after each character - restore once at end of processing
+  -- This avoids interfering with async batch processing
+
   return result
 end
 

@@ -59,8 +59,9 @@ function M.get_backend_payload_from_buf(opts, callback)
   local user_config = Config.get()
   local bufnr = vim.api.nvim_get_current_buf()
   local filepath = opts.filepath or M.default_output_path(bufnr)
-  -- Save current view to restore later
+  -- Save current view and cursor to restore later
   local view = vim.fn.winsaveview()
+  local original_cursor = vim.api.nvim_win_get_cursor(vim.api.nvim_get_current_win())
 
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local hl_map = highlights_map.build_hl_map(bufnr)
@@ -241,6 +242,9 @@ function M.get_backend_payload_from_buf(opts, callback)
     -- Handle empty buffer case
     if #lines == 0 then
       ui_block_releaser()
+      -- Restore original view and cursor position
+      vim.fn.winrestview(view)
+      vim.api.nvim_win_set_cursor(vim.api.nvim_get_current_win(), original_cursor)
       vim.schedule(function()
         callback(snap_payload)
       end)
@@ -253,6 +257,9 @@ function M.get_backend_payload_from_buf(opts, callback)
       if current_line_idx > #lines then
         -- All lines processed
         ui_block_releaser()
+        -- Restore original view and cursor position
+        vim.fn.winrestview(view)
+        vim.api.nvim_win_set_cursor(vim.api.nvim_get_current_win(), original_cursor)
         -- Ensure payload is complete and has all required fields
         if not snap_payload then
           error("Payload is nil")
@@ -393,6 +400,9 @@ function M.get_backend_payload_from_buf(opts, callback)
       end
     end
     ui_block_releaser()
+    -- Restore original view and cursor position
+    vim.fn.winrestview(view)
+    vim.api.nvim_win_set_cursor(vim.api.nvim_get_current_win(), original_cursor)
     return snap_payload
   end
 end
