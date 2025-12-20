@@ -474,10 +474,10 @@ local get_absolute_plugin_path = function(...)
   return vim.fn.fnamemodify(plugin_root .. ps .. ".." .. ps .. path, ":p")
 end
 
----Export buffer to HTML file with syntax highlighting
+---Generate backend JSON payload from current buffer
 ---@param opts SnapExportOptions|nil Export options
 ---@return SnapPayload JSON payload for backend
-local function export_buf_to_html(opts)
+local function get_backend_payload_from_buf(opts)
   opts = opts or {}
 
   local user_config = Config.get()
@@ -646,9 +646,75 @@ end
 
 ---Export current buffer to HTML
 ---@param opts SnapExportOptions|nil Export options
+M.rtf_to_clipboard = function(opts)
+  opts = opts or {}
+  local jsonPayload = vim.fn.json_encode(get_backend_payload_from_buf({
+    range = opts.range,
+    type = types.SnapPayloadType.rtf,
+  }))
+  local conf = Config.get()
+  local system_args = nil
+
+  local cwd = nil
+
+  if conf.debug ~= nil then
+    cwd = get_absolute_plugin_path("backend", conf.debug.backend)
+    if not vim.fn.isdirectory(cwd) then
+      error("Backend directory not found: " .. cwd)
+    end
+    -- Try to find backend bin in PATH
+    local backend_bin_path = vim.fn.exepath(conf.debug.backend)
+    if backend_bin_path == "" then
+      error(conf.debug.backend .. " executable not found in PATH")
+    else
+      system_args = { backend_bin_path, "run", "." }
+    end
+  else
+    system_args = { BACKEND_BIN_PATH }
+  end
+
+  local system_obj = vim.system(
+    system_args,
+    {
+      timeout = conf.timeout,
+      stdin = true,
+      cwd = cwd,
+      env = vim.fn.environ(),
+      text = true,
+    },
+    vim.schedule_wrap(function(result)
+      if result.stdout and result.stdout ~= "" then
+        local ok, res = pcall(vim.fn.json_decode, result.stdout)
+        if not ok then
+          Logger.warn("Failed to decode JSON output: " .. tostring(res))
+          return
+        end
+        if res.success then
+          Logger.info("Exported RTF to: " .. tostring(res.data.filepath))
+        else
+          print("Backend error when exporting RTF failed: " .. vim.inspect(res))
+        end
+      end
+      if result.stderr and result.stderr ~= "" then
+        print("Error exporting RTF: " .. vim.inspect(result.stderr))
+      end
+      if result.code ~= 0 then
+        print("Process exited with non-zero code: " .. tostring(result.code))
+      end
+    end)
+  )
+
+  -- Write JSON payload to stdin
+  system_obj:write(jsonPayload)
+  -- Close stdin to signal end of input
+  system_obj:write(nil)
+end
+
+---Export current buffer to HTML
+---@param opts SnapExportOptions|nil Export options
 M.html_to_clipboard = function(opts)
   opts = opts or {}
-  local jsonPayload = vim.fn.json_encode(export_buf_to_html({
+  local jsonPayload = vim.fn.json_encode(get_backend_payload_from_buf({
     range = opts.range,
     type = types.SnapPayloadType.html,
   }))
@@ -744,7 +810,7 @@ M.image_to_clipboard = function(opts)
     return
   end
   local filepath = save_path and filename and (save_path .. "/" .. filename .. ".png") or ""
-  local jsonPayload = vim.fn.json_encode(export_buf_to_html({
+  local jsonPayload = vim.fn.json_encode(get_backend_payload_from_buf({
     filepath = filepath,
     range = opts.range,
     type = types.SnapPayloadType.image,
@@ -815,15 +881,22 @@ M.run = function(opts)
     if opts.range then
       if opts.type == types.SnapPayloadType.image then
         M.image_to_clipboard({ range = opts.range })
-      else
+      elseif opts.type == types.SnapPayloadType.html then
         M.html_to_clipboard({ range = opts.range })
+      elseif opts.type == types.SnapPayloadType.rtf then
+        M.rtf_to_clipboard({ range = opts.range })
+      else
+        Logger.error("Unsupported export type: " .. tostring(opts.type))
       end
       return
     end
     if opts.type == types.SnapPayloadType.image then
       M.image_to_clipboard()
-    else
+    elseif opts.type == types.SnapPayloadType.html then
       M.html_to_clipboard()
+    elseif opts.type == types.SnapPayloadType.rtf then
+      M.rtf_to_clipboard()
+    else
     end
   end)
 end

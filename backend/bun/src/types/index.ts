@@ -6,6 +6,7 @@ export type NodeHTMLToImageBuffer =
 export const enum JSONRequestType {
   CodeImageGeneration = "image",
   CodeHTMLGeneration = "html",
+  CodeRTFGeneration = "rtf",
 }
 
 interface FontSettingsFont {
@@ -18,9 +19,9 @@ interface FontSettings {
   line_height: number;
   fonts: {
     default: FontSettingsFont;
-    bold?: FontSettingsFont;
-    italic?: FontSettingsFont;
-    bold_italic?: FontSettingsFont;
+    bold: FontSettingsFont;
+    italic: FontSettingsFont;
+    bold_italic: FontSettingsFont;
   };
 }
 
@@ -60,6 +61,27 @@ export interface JSONObjectHTMLSuccessRequest {
   };
 }
 
+export interface JSONObjectRTFSuccessRequest {
+  success: true;
+  debug: boolean;
+  data: {
+    type: JSONRequestType.CodeRTFGeneration;
+    theme: {
+      fgColor: string;
+      bgColor: string;
+    };
+    template?: JSONRequestTemplate;
+    templateFilepath?: string;
+    fontSettings: FontSettings;
+    additionalTemplateData?: { [key: string]: unknown };
+    toClipboard: boolean;
+    transparent: boolean;
+    code: Array<JSONObjectCodeLine[]>;
+    filepath: string;
+    minWidth: number;
+  };
+}
+
 export interface JSONObjectImageSuccessRequest {
   success: true;
   debug: boolean;
@@ -85,7 +107,8 @@ export interface JSONObjectImageSuccessRequest {
 // Image needs all fields from both interfaces, but HTML only needs its own fields
 export type JSONObjectSuccessRequest =
   | JSONObjectImageSuccessRequest
-  | JSONObjectHTMLSuccessRequest;
+  | JSONObjectHTMLSuccessRequest
+  | JSONObjectRTFSuccessRequest;
 
 export interface JSONObjectErrorRequest {
   success: false;

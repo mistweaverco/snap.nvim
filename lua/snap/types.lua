@@ -16,6 +16,7 @@ M.SnapConfigTemplate = {
 M.SnapPayloadType = {
   image = "image",
   html = "html",
+  rtf = "rtf",
 }
 
 ---@enum SnapImageOutputFormat

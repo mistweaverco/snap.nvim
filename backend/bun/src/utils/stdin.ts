@@ -1,4 +1,4 @@
-import type { JSONObjectRequest, JSONObjectResponse } from "./types.ts";
+import type { JSONObjectRequest, JSONObjectResponse } from "./../types";
 
 export const readAllFromStdin = async () => {
   let data = "";
