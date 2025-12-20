@@ -2,7 +2,6 @@ local types = require("snap.types")
 local Config = require("snap.config")
 local highlights_map = require("snap.highlights.map")
 local highlights_collection = require("snap.highlights.collection")
-local highlights_extraction = require("snap.highlights.extraction")
 local highlights_utils = require("snap.highlights.utils")
 local UIBlock = require("snap.ui.block")
 

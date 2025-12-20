@@ -230,6 +230,23 @@ end
 function M.get_hl_at_pos(winnr, bufnr, row, col, view_state, range)
   view.scroll_into_view(winnr, row, col, range)
 
+  -- scroll_into_view already waits for scroll and redraw to complete.
+  -- Now we need to wait a bit more for semantic tokens/LSP highlights to be applied.
+  -- Use a simple blocking wait with multiple event loop ticks.
+  local wait_done = false
+  vim.schedule(function()
+    vim.schedule(function()
+      vim.schedule(function()
+        wait_done = true
+      end)
+    end)
+  end)
+  -- Wait for multiple event loop ticks to ensure LSP highlights are ready
+  vim.wait(30, function()
+    return wait_done
+  end, 1)
+
+  -- Now inspect synchronously - highlights should be ready
   local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
   if not ok or not info then
     view.restore_view(winnr, row, view_state)
@@ -240,10 +257,10 @@ function M.get_hl_at_pos(winnr, bufnr, row, col, view_state, range)
   local highlights = M.collect_all_highlights(info)
 
   -- Merge highlights by priority
-  local merged = M.merge_highlights(highlights)
+  local result = M.merge_highlights(highlights)
 
   view.restore_view(winnr, row, view_state)
-  return merged
+  return result
 end
 
 ---Get merged highlight attributes at specific position

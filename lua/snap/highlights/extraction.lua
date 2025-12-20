@@ -172,7 +172,7 @@ function M.extract_treesitter_highlights(info)
     -- The structure can be:
     -- 1. Array of strings (capture names like "@comment.typescript")
     -- 2. Array of objects with capture/hl_group fields
-    for i, capture in ipairs(info.treesitter) do
+    for _, capture in ipairs(info.treesitter) do
       local capture_name = nil
       local priority = 100 -- Treesitter default priority
 
@@ -193,7 +193,7 @@ function M.extract_treesitter_highlights(info)
         table.insert(treesitter_highlights, { hl_group = capture_name, priority = priority })
       elseif type(capture) == "table" then
         -- Last resort: try to find any string value in the table that looks like a capture name
-        for k, v in pairs(capture) do
+        for _, v in pairs(capture) do
           if type(v) == "string" and (v:match("^@") or v ~= "") then
             -- Prefer capture names starting with "@", but accept any non-empty string
             if v:match("^@") or not capture_name then
