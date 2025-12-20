@@ -1,6 +1,7 @@
 import fs from "fs";
 import Handlebars from "handlebars";
-import type { JSONObjectCodeLine } from "./../types";
+import type { JSONObjectHTMLSuccessRequest } from "./../types";
+import { Template } from "../templates";
 
 export const HandlebarsGenerator = (
   html: string,
@@ -16,8 +17,10 @@ export const HandlebarsGenerator = (
   }
 };
 
-export const HTMLGenerator = (rows: Array<JSONObjectCodeLine[]>): string => {
-  return rows
+export const HTMLGenerator = async (
+  json: JSONObjectHTMLSuccessRequest,
+): Promise<string> => {
+  const html = json.data.code
     .map((line) => {
       return line
         .map((segment) => {
@@ -44,4 +47,10 @@ export const HTMLGenerator = (rows: Array<JSONObjectCodeLine[]>): string => {
         : `<div class="code-line">${line}</div>`,
     )
     .join("\n");
+  const template = await Template(html, json);
+  fs.writeFileSync(json.data.filepath, template, {
+    encoding: "utf-8",
+  });
+
+  return template;
 };

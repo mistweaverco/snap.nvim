@@ -1,4 +1,3 @@
-import fs from "fs";
 import { Clipboard, getJSONFromStdin, writeJSONToStdout } from "./utils";
 
 import { HTMLGenerator, ImageGenerator, RTFGenerator } from "./generators";
@@ -37,7 +36,7 @@ const main = async () => {
       break;
     case JSONRequestType.CodeHTMLGeneration:
       json = jsonPayload as JSONObjectHTMLSuccessRequest;
-      bufstr = HTMLGenerator(json.data.code);
+      bufstr = await HTMLGenerator(json);
       break;
     case JSONRequestType.CodeRTFGeneration:
       json = jsonPayload as JSONObjectRTFSuccessRequest;
