@@ -298,7 +298,7 @@ end
 ---Extract semantic token highlight from vim.inspect_pos result
 ---Semantic tokens can be in extmarks (with ns matching "semantic_tokens") or in semantic_tokens field
 ---Returns the highest priority semantic token highlight
----Note: In Neovim, lower priority values have higher precedence (priority 0 > priority 100)
+---Note: In Neovim, higher priority values have higher precedence (priority 200 > priority 100)
 ---@param info table Result from vim.inspect_pos
 ---@return string|nil Highlight group name or nil
 local function extract_semantic_hl(info)
@@ -307,7 +307,7 @@ local function extract_semantic_hl(info)
   end
 
   local best_hl = nil
-  local best_priority = math.huge
+  local best_priority = 0
 
   -- Check extmarks for semantic tokens (namespace contains "semantic_tokens")
   if info.extmarks then
@@ -317,8 +317,8 @@ local function extract_semantic_hl(info)
         local hl = extmark.opts and extmark.opts.hl_group
         local priority = (extmark.opts and extmark.opts.priority) or 0
 
-        -- Lower priority values have higher precedence in Neovim
-        if hl and priority < best_priority then
+        -- Higher priority values have higher precedence in Neovim
+        if hl and priority > best_priority then
           best_hl = hl
           best_priority = priority
         end
@@ -332,8 +332,8 @@ local function extract_semantic_hl(info)
       local hl = token.hl_group or (token.opts and token.opts.hl_group)
       local priority = token.priority or (token.opts and token.opts.priority) or 0
 
-      -- Lower priority values have higher precedence in Neovim
-      if hl and priority < best_priority then
+      -- Higher priority values have higher precedence in Neovim
+      if hl and priority > best_priority then
         best_hl = hl
         best_priority = priority
       end
@@ -344,14 +344,14 @@ local function extract_semantic_hl(info)
 end
 
 ---Extract all treesitter captures from vim.inspect_pos result
----Treesitter captures are ordered by priority (lowest priority value = highest precedence first)
+---Treesitter captures are ordered by priority (highest priority value = highest precedence first)
 ---Each capture has a capture name (like @comment.typescript) that is the highlight group name
 ---@param info table Result from vim.inspect_pos
 ---@return table Array of {hl_group = string, priority = number} or empty table
 local function extract_treesitter_highlights(info)
   local treesitter_highlights = {}
   if info and info.treesitter and #info.treesitter > 0 then
-    -- Treesitter captures are ordered by priority (lowest priority value = highest precedence first)
+    -- Treesitter captures are ordered by priority (highest priority value = highest precedence first)
     -- The structure can be:
     -- 1. Array of strings (capture names like "@comment.typescript")
     -- 2. Array of objects with capture/hl_group fields
@@ -364,15 +364,9 @@ local function extract_treesitter_highlights(info)
         capture_name = capture
       elseif type(capture) == "table" then
         -- Object case: extract capture name and priority
-        -- Try different possible field names
-        -- Note: hl_group might be the resolved highlight group, but we prefer the capture name
-        -- to maintain consistency with how treesitter highlights are referenced
-        capture_name = capture.capture or capture.name or capture[1]
-        -- If hl_group exists, it's the resolved highlight group (like "Comment")
-        -- But we want the capture name (like "@comment.typescript") for consistency
-        if not capture_name and capture.hl_group then
-          capture_name = capture.hl_group
-        end
+        -- Prefer hl_group (the actual highlight group name like "@comment.typescript")
+        -- over capture (just the capture name like "comment")
+        capture_name = capture.hl_group or capture.capture or capture.name or capture[1]
         priority = capture.priority or 100
       end
       
@@ -453,12 +447,12 @@ local function merge_highlights(highlights)
     return nil
   end
 
-  -- Sort by priority (lower priority value = higher precedence, comes first)
+  -- Sort by priority (higher priority value = higher precedence, comes first)
   table.sort(highlights, function(a, b)
-    return (a.priority or 0) < (b.priority or 0)
+    return (a.priority or 0) > (b.priority or 0)
   end)
 
-  -- Start with the highest priority (lowest priority value) highlight as base
+  -- Start with the highest priority (highest priority value) highlight as base
   -- Use raw highlight to see which attributes are actually set
   local merged_raw = {}
   local base_raw_hl, _ = get_raw_hl_by_name(highlights[1].hl_group)
@@ -508,7 +502,7 @@ local function merge_highlights(highlights)
 
   -- Normalize the merged result (convert colors to hex, apply defaults)
   local merged = {}
-  -- Store the primary highlight group (highest priority, lowest priority value)
+  -- Store the primary highlight group (highest priority, highest priority value)
   merged.hl_group = highlights[1].hl_group
   if merged_raw.fg then
     merged.fg = convert_color_to_hex(merged_raw.fg)
@@ -528,34 +522,28 @@ local function merge_highlights(highlights)
 end
 
 ---Collect all highlights at a position, ordered by priority
+---We collect in reverse order (syntax -> treesitter -> extmarks) so that extmarks
+---(which typically have the highest precedence) are added last and can override others
 ---@param info table Result from vim.inspect_pos
 ---@return table Array of {hl_group = string, priority = number} sorted by priority
 local function collect_all_highlights(info)
   local highlights = {}
 
-  -- Priority 1: Extmarks with hl_group/virt_text (explicit priority)
-  -- This includes: diagnostics, LSP semantic tokens, treesitter (default priority 100),
-  -- plugins (git signs, indent guides, rainbow delimiters, etc.)
-  if info.extmarks and #info.extmarks > 0 then
-    for _, extmark in ipairs(info.extmarks) do
-      if extmark.opts and extmark.opts.hl_group then
-        -- Priority defaults to 0 if not specified (highest precedence)
-        -- But if namespace suggests treesitter, use priority 100
-        local ns = extmark.ns or ""
-        local is_treesitter = ns:match("treesitter") or ns:match("TS")
-        local priority = (extmark.opts.priority ~= nil) and extmark.opts.priority or (is_treesitter and 100 or 0)
-        table.insert(highlights, { hl_group = extmark.opts.hl_group, priority = priority })
-      end
+  -- Priority 3: Syntax highlighting (default priority 50) - collect first
+  if info.syntax and #info.syntax > 0 then
+    local syn = info.syntax[#info.syntax]
+    if syn.hl_group then
+      -- Syntax default priority is 50
+      table.insert(highlights, { hl_group = syn.hl_group, priority = 50 })
     end
   end
 
-  -- Priority 2: Treesitter highlights (also via extmarks, but check treesitter field as fallback)
-  -- Treesitter highlights are typically already captured above as extmarks with priority 100,
+  -- Priority 2: Treesitter highlights (default priority 100) - collect second
+  -- Treesitter highlights are typically already captured as extmarks with priority 100,
   -- but we check the treesitter field as a fallback for compatibility
-  -- Collect all treesitter captures
   local treesitter_highlights = extract_treesitter_highlights(info)
   for _, ts_hl in ipairs(treesitter_highlights) do
-    -- Check if we already have this highlight from extmarks
+    -- Check if we already have this highlight
     local already_exists = false
     for _, hl in ipairs(highlights) do
       if hl.hl_group == ts_hl.hl_group then
@@ -568,21 +556,70 @@ local function collect_all_highlights(info)
     end
   end
 
-  -- Priority 3: Syntax highlighting (default priority 50)
-  if info.syntax and #info.syntax > 0 then
-    local syn = info.syntax[#info.syntax]
-    if syn.hl_group then
-      -- Check if we already have this highlight
-      local already_exists = false
-      for _, hl in ipairs(highlights) do
-        if hl.hl_group == syn.hl_group then
-          already_exists = true
-          break
-        end
+  -- Priority 1: Extmarks with hl_group/virt_text (explicit priority) - collect LAST
+  -- This includes: diagnostics, LSP semantic tokens, treesitter (default priority 100),
+  -- plugins (git signs, indent guides, rainbow delimiters, todo-comments, etc.)
+  -- Extmarks have the highest precedence and should override treesitter/syntax
+  if info.extmarks and #info.extmarks > 0 then
+    for _, extmark in ipairs(info.extmarks) do
+      -- Check for hl_group in opts first, then directly in extmark
+      local hl_group = nil
+      if extmark.opts and extmark.opts.hl_group then
+        hl_group = extmark.opts.hl_group
+      elseif extmark.hl_group then
+        hl_group = extmark.hl_group
       end
-      if not already_exists then
-        -- Syntax default priority is 50
-        table.insert(highlights, { hl_group = syn.hl_group, priority = 50 })
+      
+      if hl_group then
+        -- Priority handling for extmarks:
+        -- - Treesitter extmarks: use priority 100 (or explicit if set and > 100)
+        -- - Other extmarks: should have highest precedence to override treesitter/syntax
+        --   Higher priority value = higher precedence
+        local ns = tostring(extmark.ns or "")
+        local is_treesitter = ns:match("^treesitter") or ns:match("^nvim%-treesitter") or ns == "TS"
+        
+        -- Get explicit priority from opts if available
+        local extmark_priority = nil
+        if extmark.opts and extmark.opts.priority ~= nil then
+          extmark_priority = extmark.opts.priority
+        elseif extmark.priority ~= nil then
+          extmark_priority = extmark.priority
+        end
+        
+        local priority
+        if is_treesitter then
+          -- Treesitter extmarks: default to 100, but use explicit if it's higher
+          priority = extmark_priority or 100
+        else
+          -- Non-treesitter extmarks: should override treesitter (100) and syntax (50)
+          -- If explicit priority is <= 100 (lower precedence), override to 200 (higher precedence)
+          -- If explicit priority is > 100 (higher precedence), use it as-is
+          if extmark_priority == nil then
+            priority = 200  -- No explicit priority: use high precedence to override treesitter
+          elseif extmark_priority <= 100 then
+            priority = 200   -- Explicit priority is too low: override to higher precedence
+          else
+            priority = extmark_priority  -- Explicit priority is good (higher): use it
+          end
+        end
+        
+        -- Check if we already have this highlight group
+        -- If we do, replace it with the extmark version (higher precedence)
+        local found_index = nil
+        for i, hl in ipairs(highlights) do
+          if hl.hl_group == hl_group then
+            found_index = i
+            break
+          end
+        end
+        
+        if found_index then
+          -- Replace existing highlight with extmark version (higher precedence)
+          highlights[found_index] = { hl_group = hl_group, priority = priority }
+        else
+          -- Add new extmark highlight
+          table.insert(highlights, { hl_group = hl_group, priority = priority })
+        end
       end
     end
   end
@@ -593,7 +630,7 @@ end
 ---Get merged highlight attributes at specific position using vim.inspect_pos
 ---This reliably gets all highlights following the correct hierarchy and merges them:
 ---1. Extmarks with hl_group/virt_text (explicit priority) - includes diagnostics, LSP semantic tokens,
----   treesitter (default priority 100), plugins, etc. Lower priority value = higher precedence.
+---   treesitter (default priority 100), plugins, etc. Higher priority value = higher precedence.
 ---2. Syntax highlights (default priority 50)
 ---3. Fallback/UI highlights (Normal, CursorLine, Visual, etc.)
 ---Highlights are merged: higher priority highlights override lower priority ones for each attribute,
