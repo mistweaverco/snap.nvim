@@ -358,7 +358,7 @@ local function extract_treesitter_highlights(info)
     for i, capture in ipairs(info.treesitter) do
       local capture_name = nil
       local priority = 100 -- Treesitter default priority
-      
+
       if type(capture) == "string" then
         -- Simple case: capture is a string (the capture name)
         capture_name = capture
@@ -369,7 +369,7 @@ local function extract_treesitter_highlights(info)
         capture_name = capture.hl_group or capture.capture or capture.name or capture[1]
         priority = capture.priority or 100
       end
-      
+
       if capture_name and capture_name ~= "" then
         -- Use the capture name directly as the highlight group
         -- get_hl_by_name will handle resolution (including "@" prefix)
@@ -437,9 +437,9 @@ local restore_view = function(winnr, row, view)
   end
 end
 
----Merge multiple highlight definitions, with higher priority (lower priority value) taking precedence
+---Merge multiple highlight definitions, with higher priority taking precedence
 ---for each attribute. Attributes from lower priority highlights are preserved if not specified in
----higher priority highlights.
+---higher priority highlights. When priorities are equal, the last one added (higher index) wins.
 ---@param highlights table Array of {hl_group = string, priority = number}
 ---@return table|nil Merged highlight definition table (normalized with defaults) or nil
 local function merge_highlights(highlights)
@@ -447,9 +447,21 @@ local function merge_highlights(highlights)
     return nil
   end
 
+  -- Add original index to each highlight for tie-breaking
+  for i, hl in ipairs(highlights) do
+    hl._original_index = i
+  end
+
   -- Sort by priority (higher priority value = higher precedence, comes first)
+  -- When priorities are equal, higher original index (last one added) wins
   table.sort(highlights, function(a, b)
-    return (a.priority or 0) > (b.priority or 0)
+    local a_priority = a.priority or 0
+    local b_priority = b.priority or 0
+    if a_priority ~= b_priority then
+      return a_priority > b_priority
+    end
+    -- Equal priority: last one added (higher index) wins
+    return (a._original_index or 0) > (b._original_index or 0)
   end)
 
   -- Start with the highest priority (highest priority value) highlight as base
@@ -569,7 +581,7 @@ local function collect_all_highlights(info)
       elseif extmark.hl_group then
         hl_group = extmark.hl_group
       end
-      
+
       if hl_group then
         -- Priority handling for extmarks:
         -- - Treesitter extmarks: use priority 100 (or explicit if set and > 100)
@@ -577,7 +589,7 @@ local function collect_all_highlights(info)
         --   Higher priority value = higher precedence
         local ns = tostring(extmark.ns or "")
         local is_treesitter = ns:match("^treesitter") or ns:match("^nvim%-treesitter") or ns == "TS"
-        
+
         -- Get explicit priority from opts if available
         local extmark_priority = nil
         if extmark.opts and extmark.opts.priority ~= nil then
@@ -585,7 +597,7 @@ local function collect_all_highlights(info)
         elseif extmark.priority ~= nil then
           extmark_priority = extmark.priority
         end
-        
+
         local priority
         if is_treesitter then
           -- Treesitter extmarks: default to 100, but use explicit if it's higher
@@ -595,14 +607,14 @@ local function collect_all_highlights(info)
           -- If explicit priority is <= 100 (lower precedence), override to 200 (higher precedence)
           -- If explicit priority is > 100 (higher precedence), use it as-is
           if extmark_priority == nil then
-            priority = 200  -- No explicit priority: use high precedence to override treesitter
+            priority = 200 -- No explicit priority: use high precedence to override treesitter
           elseif extmark_priority <= 100 then
-            priority = 200   -- Explicit priority is too low: override to higher precedence
+            priority = 200 -- Explicit priority is too low: override to higher precedence
           else
-            priority = extmark_priority  -- Explicit priority is good (higher): use it
+            priority = extmark_priority -- Explicit priority is good (higher): use it
           end
         end
-        
+
         -- Check if we already have this highlight group
         -- If we do, replace it with the extmark version (higher precedence)
         local found_index = nil
@@ -612,7 +624,7 @@ local function collect_all_highlights(info)
             break
           end
         end
-        
+
         if found_index then
           -- Replace existing highlight with extmark version (higher precedence)
           highlights[found_index] = { hl_group = hl_group, priority = priority }

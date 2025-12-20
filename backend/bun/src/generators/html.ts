@@ -17,6 +17,12 @@ export const HandlebarsGenerator = (
   }
 };
 
+/**
+ * Generates HTML from JSON representation of code snippet
+ * and writes it to specified filepath.
+ * @param json - JSON payload from the request
+ * @returns Generated HTML as a string
+ */
 export const HTMLGenerator = async (
   json: JSONObjectHTMLSuccessRequest,
 ): Promise<string> => {
