@@ -343,22 +343,60 @@ local function extract_semantic_hl(info)
   return best_hl
 end
 
----Extract treesitter capture from vim.inspect_pos result
----Note: The first element has the highest priority (lowest priority value)
+---Extract all treesitter captures from vim.inspect_pos result
+---Treesitter captures are ordered by priority (lowest priority value = highest precedence first)
+---Each capture has a capture name (like @comment.typescript) that is the highlight group name
 ---@param info table Result from vim.inspect_pos
----@return string|nil Highlight group name or nil
-local function extract_treesitter_hl(info)
+---@return table Array of {hl_group = string, priority = number} or empty table
+local function extract_treesitter_highlights(info)
+  local treesitter_highlights = {}
   if info and info.treesitter and #info.treesitter > 0 then
-    -- Get the last (highest priority) treesitter capture
-    -- In Neovim, Treesitter arrays are ordered by priority with lowest priority value first
-    -- This is in contrast to the LSP semantic tokens where usually lower index = higher priority
-    local captures = info.treesitter
-    local hl_group = captures[#captures].hl_group
-    if hl_group then
-      return hl_group
+    -- Treesitter captures are ordered by priority (lowest priority value = highest precedence first)
+    -- The structure can be:
+    -- 1. Array of strings (capture names like "@comment.typescript")
+    -- 2. Array of objects with capture/hl_group fields
+    for i, capture in ipairs(info.treesitter) do
+      local capture_name = nil
+      local priority = 100 -- Treesitter default priority
+      
+      if type(capture) == "string" then
+        -- Simple case: capture is a string (the capture name)
+        capture_name = capture
+      elseif type(capture) == "table" then
+        -- Object case: extract capture name and priority
+        -- Try different possible field names
+        -- Note: hl_group might be the resolved highlight group, but we prefer the capture name
+        -- to maintain consistency with how treesitter highlights are referenced
+        capture_name = capture.capture or capture.name or capture[1]
+        -- If hl_group exists, it's the resolved highlight group (like "Comment")
+        -- But we want the capture name (like "@comment.typescript") for consistency
+        if not capture_name and capture.hl_group then
+          capture_name = capture.hl_group
+        end
+        priority = capture.priority or 100
+      end
+      
+      if capture_name and capture_name ~= "" then
+        -- Use the capture name directly as the highlight group
+        -- get_hl_by_name will handle resolution (including "@" prefix)
+        table.insert(treesitter_highlights, { hl_group = capture_name, priority = priority })
+      elseif type(capture) == "table" then
+        -- Last resort: try to find any string value in the table that looks like a capture name
+        for k, v in pairs(capture) do
+          if type(v) == "string" and (v:match("^@") or v ~= "") then
+            -- Prefer capture names starting with "@", but accept any non-empty string
+            if v:match("^@") or not capture_name then
+              capture_name = v
+            end
+          end
+        end
+        if capture_name and capture_name ~= "" then
+          table.insert(treesitter_highlights, { hl_group = capture_name, priority = priority })
+        end
+      end
     end
   end
-  return nil
+  return treesitter_highlights
 end
 
 -- TODO: Optimize scrolling
@@ -502,7 +540,10 @@ local function collect_all_highlights(info)
     for _, extmark in ipairs(info.extmarks) do
       if extmark.opts and extmark.opts.hl_group then
         -- Priority defaults to 0 if not specified (highest precedence)
-        local priority = (extmark.opts.priority ~= nil) and extmark.opts.priority or 0
+        -- But if namespace suggests treesitter, use priority 100
+        local ns = extmark.ns or ""
+        local is_treesitter = ns:match("treesitter") or ns:match("TS")
+        local priority = (extmark.opts.priority ~= nil) and extmark.opts.priority or (is_treesitter and 100 or 0)
         table.insert(highlights, { hl_group = extmark.opts.hl_group, priority = priority })
       end
     end
@@ -511,19 +552,19 @@ local function collect_all_highlights(info)
   -- Priority 2: Treesitter highlights (also via extmarks, but check treesitter field as fallback)
   -- Treesitter highlights are typically already captured above as extmarks with priority 100,
   -- but we check the treesitter field as a fallback for compatibility
-  local treesitter_hl = extract_treesitter_hl(info)
-  if treesitter_hl then
+  -- Collect all treesitter captures
+  local treesitter_highlights = extract_treesitter_highlights(info)
+  for _, ts_hl in ipairs(treesitter_highlights) do
     -- Check if we already have this highlight from extmarks
     local already_exists = false
     for _, hl in ipairs(highlights) do
-      if hl.hl_group == treesitter_hl then
+      if hl.hl_group == ts_hl.hl_group then
         already_exists = true
         break
       end
     end
     if not already_exists then
-      -- Treesitter default priority is 100
-      table.insert(highlights, { hl_group = treesitter_hl, priority = 100 })
+      table.insert(highlights, ts_hl)
     end
   end
 
