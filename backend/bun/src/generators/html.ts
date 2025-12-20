@@ -37,7 +37,7 @@ export const HTMLGenerator = async (
           if (segment.underline) {
             segmentHTML = `<u>${segmentHTML}</u>`;
           }
-          return `<span style="color: ${segment.fg}; background-color: ${segment.bg};">${segmentHTML}</span>`;
+          return `<span style="color: ${segment.fg}; background-color: ${segment.bg};" data-hl="${segment.hl_name}">${segmentHTML}</span>`;
         })
         .join("");
     })

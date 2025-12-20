@@ -30,6 +30,46 @@ pcall(function()
   end
 end)
 
+---Get raw highlight definition by name (without defaults), resolving links
+---@param name string Highlight group name
+---@return table|nil Raw highlight definition table (only includes attributes that are set) or nil
+---@return string|nil Actual highlight group name used
+local function get_raw_hl_by_name(name)
+  if not name or name == "" then
+    return nil, nil
+  end
+
+  local ok, hl
+
+  -- If the name already starts with "@" (e.g. @lsp.type.variable from semantic tokens),
+  -- try it directly first. nvim_get_hl with link=false resolves link chains automatically.
+  if name:sub(1, 1) == "@" then
+    ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+    if ok and hl and next(hl) then
+      return hl, name
+    end
+  end
+
+  -- HACK:
+  -- we need to prepend "@" to make it a valid tree-sitter highlight group
+  -- e.g. "function.builtin" -> "@function.builtin"
+  -- but some highlight groups are not prefixed, so we try both
+  -- e.g. "Normal", "Comment", etc.
+  if name:sub(1, 1) ~= "@" then
+    ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = "@" .. name, link = false })
+    if ok and hl and next(hl) then
+      return hl, "@" .. name
+    end
+  end
+
+  ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+  if ok and hl and next(hl) then
+    return hl, name
+  end
+
+  return nil, nil
+end
+
 ---Get highlight definition by name, resolving links
 ---@param name string Highlight group name
 ---@return table|nil Highlight definition table or nil
@@ -101,7 +141,7 @@ end
 ---@param t table|nil Highlight definition table
 ---@param text string Text content (for future use)
 ---@return SnapPayloadDataCodeItem|nil Highlight style or nil
-local function hl_table_to_style(t, text)
+local function get_snap_payload_data_code_item(t, text)
   if not t then
     return nil
   end
@@ -365,9 +405,158 @@ local restore_view = function(winnr, row, view)
   end
 end
 
----Get highlight group at specific position using vim.inspect_pos
----This reliably gets all highlights including extmarks, semantic tokens, treesitter, and syntax
----Priority: extmarks > semantic_tokens > treesitter > syntax
+---Merge multiple highlight definitions, with higher priority (lower priority value) taking precedence
+---for each attribute. Attributes from lower priority highlights are preserved if not specified in
+---higher priority highlights.
+---@param highlights table Array of {hl_group = string, priority = number}
+---@return table|nil Merged highlight definition table (normalized with defaults) or nil
+local function merge_highlights(highlights)
+  if not highlights or #highlights == 0 then
+    return nil
+  end
+
+  -- Sort by priority (lower priority value = higher precedence, comes first)
+  table.sort(highlights, function(a, b)
+    return (a.priority or 0) < (b.priority or 0)
+  end)
+
+  -- Start with the highest priority (lowest priority value) highlight as base
+  -- Use raw highlight to see which attributes are actually set
+  local merged_raw = {}
+  local base_raw_hl, _ = get_raw_hl_by_name(highlights[1].hl_group)
+  if base_raw_hl then
+    -- Copy attributes that are actually set in the raw highlight
+    if base_raw_hl.fg ~= nil then
+      merged_raw.fg = base_raw_hl.fg
+    end
+    if base_raw_hl.bg ~= nil then
+      merged_raw.bg = base_raw_hl.bg
+    end
+    if base_raw_hl.bold ~= nil then
+      merged_raw.bold = base_raw_hl.bold
+    end
+    if base_raw_hl.italic ~= nil then
+      merged_raw.italic = base_raw_hl.italic
+    end
+    if base_raw_hl.underline ~= nil then
+      merged_raw.underline = base_raw_hl.underline
+    end
+  end
+
+  -- Merge remaining highlights (lower priority, but may have attributes not in higher priority)
+  -- We iterate from highest to lowest priority, so higher priority attributes override lower ones
+  for i = 2, #highlights do
+    local raw_hl, _ = get_raw_hl_by_name(highlights[i].hl_group)
+    if raw_hl then
+      -- Fill in missing attributes from lower priority highlights
+      -- Only use attributes that are actually set in the raw highlight
+      if merged_raw.fg == nil and raw_hl.fg ~= nil then
+        merged_raw.fg = raw_hl.fg
+      end
+      if merged_raw.bg == nil and raw_hl.bg ~= nil then
+        merged_raw.bg = raw_hl.bg
+      end
+      if merged_raw.bold == nil and raw_hl.bold ~= nil then
+        merged_raw.bold = raw_hl.bold
+      end
+      if merged_raw.italic == nil and raw_hl.italic ~= nil then
+        merged_raw.italic = raw_hl.italic
+      end
+      if merged_raw.underline == nil and raw_hl.underline ~= nil then
+        merged_raw.underline = raw_hl.underline
+      end
+    end
+  end
+
+  -- Normalize the merged result (convert colors to hex, apply defaults)
+  local merged = {}
+  -- Store the primary highlight group (highest priority, lowest priority value)
+  merged.hl_group = highlights[1].hl_group
+  if merged_raw.fg then
+    merged.fg = convert_color_to_hex(merged_raw.fg)
+  else
+    merged.fg = DEFAULT_FG
+  end
+  if merged_raw.bg then
+    merged.bg = convert_color_to_hex(merged_raw.bg)
+  else
+    merged.bg = DEFAULT_BG
+  end
+  merged.bold = merged_raw.bold or false
+  merged.italic = merged_raw.italic or false
+  merged.underline = merged_raw.underline or false
+
+  return merged
+end
+
+---Collect all highlights at a position, ordered by priority
+---@param info table Result from vim.inspect_pos
+---@return table Array of {hl_group = string, priority = number} sorted by priority
+local function collect_all_highlights(info)
+  local highlights = {}
+
+  -- Priority 1: Extmarks with hl_group/virt_text (explicit priority)
+  -- This includes: diagnostics, LSP semantic tokens, treesitter (default priority 100),
+  -- plugins (git signs, indent guides, rainbow delimiters, etc.)
+  if info.extmarks and #info.extmarks > 0 then
+    for _, extmark in ipairs(info.extmarks) do
+      if extmark.opts and extmark.opts.hl_group then
+        -- Priority defaults to 0 if not specified (highest precedence)
+        local priority = (extmark.opts.priority ~= nil) and extmark.opts.priority or 0
+        table.insert(highlights, { hl_group = extmark.opts.hl_group, priority = priority })
+      end
+    end
+  end
+
+  -- Priority 2: Treesitter highlights (also via extmarks, but check treesitter field as fallback)
+  -- Treesitter highlights are typically already captured above as extmarks with priority 100,
+  -- but we check the treesitter field as a fallback for compatibility
+  local treesitter_hl = extract_treesitter_hl(info)
+  if treesitter_hl then
+    -- Check if we already have this highlight from extmarks
+    local already_exists = false
+    for _, hl in ipairs(highlights) do
+      if hl.hl_group == treesitter_hl then
+        already_exists = true
+        break
+      end
+    end
+    if not already_exists then
+      -- Treesitter default priority is 100
+      table.insert(highlights, { hl_group = treesitter_hl, priority = 100 })
+    end
+  end
+
+  -- Priority 3: Syntax highlighting (default priority 50)
+  if info.syntax and #info.syntax > 0 then
+    local syn = info.syntax[#info.syntax]
+    if syn.hl_group then
+      -- Check if we already have this highlight
+      local already_exists = false
+      for _, hl in ipairs(highlights) do
+        if hl.hl_group == syn.hl_group then
+          already_exists = true
+          break
+        end
+      end
+      if not already_exists then
+        -- Syntax default priority is 50
+        table.insert(highlights, { hl_group = syn.hl_group, priority = 50 })
+      end
+    end
+  end
+
+  return highlights
+end
+
+---Get merged highlight attributes at specific position using vim.inspect_pos
+---This reliably gets all highlights following the correct hierarchy and merges them:
+---1. Extmarks with hl_group/virt_text (explicit priority) - includes diagnostics, LSP semantic tokens,
+---   treesitter (default priority 100), plugins, etc. Lower priority value = higher precedence.
+---2. Syntax highlights (default priority 50)
+---3. Fallback/UI highlights (Normal, CursorLine, Visual, etc.)
+---Highlights are merged: higher priority highlights override lower priority ones for each attribute,
+---but attributes not specified in higher priority highlights are preserved from lower priority ones.
 ---Because certain highlights (like semantic tokens) are only rendered when in view,
 ---we pass in the cursor position to jump back after inspection
 ---This will scroll the view temporarily
@@ -377,54 +566,45 @@ end
 ---@param col number Column number (0-based byte offset)
 ---@param view vim.fn.winsaveview.ret View state to restore later
 ---@param range SnapVisualRange|nil Range to consider
----@return string|nil Highlight group name or nil
+---@return table|nil Merged highlight definition table or nil
 local function get_hl_at_pos(winnr, bufnr, row, col, view, range)
   scroll_into_view(winnr, row, col, range)
 
   local ok, info = pcall(vim.inspect_pos, bufnr, row, col)
   if not ok or not info then
+    restore_view(winnr, row, view)
     return nil
   end
 
-  -- Priority 1: Extmarks with highlights (highest precedence)
-  if info.extmarks and #info.extmarks > 0 then
-    for i = #info.extmarks, 1, -1 do
-      local extmark = info.extmarks[i]
-      if extmark.opts and extmark.opts.hl_group then
-        restore_view(winnr, row, view)
-        return extmark.opts.hl_group
-      end
-    end
-  end
+  -- Collect all highlights at this position
+  local highlights = collect_all_highlights(info)
 
-  -- Priority 2: Semantic tokens
-  local semantic_hl = extract_semantic_hl(info)
-  if semantic_hl then
-    restore_view(winnr, row, view)
-    return semantic_hl
-  end
-
-  -- Priority 3: Treesitter captures
-  local treesitter_hl = extract_treesitter_hl(info)
-  if treesitter_hl then
-    restore_view(winnr, row, view)
-    return treesitter_hl
-  end
-
-  -- Priority 4: Syntax highlighting
-  if info.syntax and #info.syntax > 0 then
-    local syn = info.syntax[#info.syntax]
-    if syn.hl_group then
-      restore_view(winnr, row, view)
-      return syn.hl_group
-    end
-  end
+  -- Merge highlights by priority
+  local merged = merge_highlights(highlights)
 
   restore_view(winnr, row, view)
-  return nil
+  return merged
 end
 
----Get highlight group at specific position
+---Create a key from highlight attributes for comparison and caching
+---@param hl_attrs table|nil Highlight attributes table
+---@return string|nil Key string or nil
+local function hl_attrs_to_key(hl_attrs)
+  if not hl_attrs then
+    return nil
+  end
+  -- Create a unique key from the highlight attributes
+  return string.format(
+    "%s|%s|%s|%s|%s",
+    hl_attrs.fg or "",
+    hl_attrs.bg or "",
+    tostring(hl_attrs.bold or false),
+    tostring(hl_attrs.italic or false),
+    tostring(hl_attrs.underline or false)
+  )
+end
+
+---Get merged highlight attributes at specific position
 ---Uses vim.inspect_pos for accurate results including semantic tokens
 ---Falls back to hl_map lookup if vim.inspect_pos is not available
 ---@param winr number Window number
@@ -434,7 +614,7 @@ end
 ---@param col number Column number (0-based byte offset)
 ---@param view vim.fn.winsaveview.ret View state to restore later
 ---@param range SnapVisualRange|nil Range to consider
----@return string|nil Highlight group name or nil
+---@return table|nil Merged highlight attributes table or nil
 local function get_hl_at(winr, hl_map, bufnr, row, col, view, range)
   if vim.inspect_pos then
     local hl = get_hl_at_pos(winr, bufnr, row, col, view, range)
@@ -443,13 +623,22 @@ local function get_hl_at(winr, hl_map, bufnr, row, col, view, range)
     end
   end
 
-  -- Fallback to hl_map lookup
+  -- Fallback to hl_map lookup - resolve highlight group to attributes
   if not hl_map[row] then
     return nil
   end
   local existing_segments = exists_in_hl_map(hl_map, row, col, col + 1)
-  if existing_segments then
-    return existing_segments[#existing_segments].hl_group
+  if existing_segments and #existing_segments > 0 then
+    -- Get the highlight group from the segment
+    local hl_group = existing_segments[#existing_segments].hl_group
+    if hl_group then
+      local hldef, resolved_hl = get_hl_by_name(hl_group)
+      if hldef then
+        -- Include the highlight group name in the result
+        hldef.hl_group = resolved_hl or hl_group
+        return hldef
+      end
+    end
   end
   return nil
 end
@@ -488,7 +677,6 @@ local function get_backend_payload_from_buf(opts)
 
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local hl_map = build_hl_map(bufnr)
-  local hl_style_cache = {}
 
   --- @type SnapPayload
   local snap_payload = {
@@ -509,7 +697,7 @@ local function get_backend_payload_from_buf(opts)
       templateFilepath = user_config.templateFilepath or nil,
       transparent = true,
       minWidth = 0,
-      type = opts.type or types.SnapPayloadType.html,
+      type = opts.type or types.SnapPayloadType.image,
     },
   }
 
@@ -545,35 +733,42 @@ local function get_backend_payload_from_buf(opts)
     ---@type table<SnapPayloadDataCodeItem|nil>
     local line_items = {}
     local col = 0
-    local current_hl = nil
+    local current_hl_key = nil
+    local current_hl_attrs = nil
     local current_segment = ""
     while col < #line do
       local ch = line:sub(col + 1, col + 1)
-      local hl_group = get_hl_at(win, hl_map, bufnr, row - 1, col, view, opts.range)
-      if hl_group ~= current_hl then
+      local hl_attrs = get_hl_at(win, hl_map, bufnr, row - 1, col, view, opts.range)
+      -- If no highlight attributes, create a default one with "Normal"
+      if not hl_attrs then
+        hl_attrs = {
+          hl_group = "Normal",
+          fg = DEFAULT_FG,
+          bg = DEFAULT_BG,
+          bold = false,
+          italic = false,
+          underline = false,
+        }
+      end
+      local hl_key = hl_attrs_to_key(hl_attrs)
+      if hl_key ~= current_hl_key then
         if current_segment ~= "" then
           ---@type SnapPayloadDataCodeItem|nil
-          local style = nil
-          if current_hl then
-            local cached = hl_style_cache[current_hl]
-            if cached then
-              style = cached.style
-            else
-              local hldef, resolved_hl
-              hldef, resolved_hl = get_hl_by_name(current_hl)
-              style = hl_table_to_style(hldef, current_segment)
-              hl_style_cache[current_hl] = { style = style, resolved_hl = resolved_hl }
-            end
+          local snap_payload_data_code_item = nil
+          local hl_name = "Normal"
+          if current_hl_attrs and current_hl_attrs.hl_group then
+            hl_name = current_hl_attrs.hl_group
+            snap_payload_data_code_item = get_snap_payload_data_code_item(current_hl_attrs, current_segment)
           end
-          if style then
+          if snap_payload_data_code_item then
             table.insert(line_items, {
-              fg = style.fg,
-              bg = style.bg,
+              fg = snap_payload_data_code_item.fg,
+              bg = snap_payload_data_code_item.bg,
               text = current_segment,
-              bold = style.bold,
-              italic = style.italic,
-              underline = style.underline,
-              hl_table = style.hl_table,
+              bold = snap_payload_data_code_item.bold,
+              italic = snap_payload_data_code_item.italic,
+              underline = snap_payload_data_code_item.underline,
+              hl_name = hl_name,
             })
           else
             table.insert(line_items, {
@@ -583,12 +778,13 @@ local function get_backend_payload_from_buf(opts)
               bold = false,
               italic = false,
               underline = false,
-              hl_table = {},
+              hl_name = hl_name,
             })
           end
         end
         current_segment = ch
-        current_hl = hl_group
+        current_hl_key = hl_key
+        current_hl_attrs = hl_attrs
       else
         current_segment = current_segment .. ch
       end
@@ -596,29 +792,21 @@ local function get_backend_payload_from_buf(opts)
     end
     if current_segment ~= "" then
       ---@type SnapPayloadDataCodeItem|nil
-      local style = nil
-      local resolved_hl = nil
-      if current_hl then
-        local cached = hl_style_cache[current_hl]
-        if cached then
-          style = cached.style
-          resolved_hl = cached.resolved_hl
-        else
-          local hldef
-          hldef, resolved_hl = get_hl_by_name(current_hl)
-          style = hl_table_to_style(hldef, current_segment)
-          hl_style_cache[current_hl] = { style = style, resolved_hl = resolved_hl }
-        end
+      local snap_payload_data_code_item = nil
+      local hl_name = "Normal"
+      if current_hl_attrs and current_hl_attrs.hl_group then
+        hl_name = current_hl_attrs.hl_group
+        snap_payload_data_code_item = get_snap_payload_data_code_item(current_hl_attrs, current_segment)
       end
-      if style then
+      if snap_payload_data_code_item then
         table.insert(line_items, {
-          fg = style.fg,
-          bg = style.bg,
+          fg = snap_payload_data_code_item.fg,
+          bg = snap_payload_data_code_item.bg,
           text = current_segment,
-          bold = style.bold,
-          italic = style.italic,
-          underline = style.underline,
-          hl_table = style.hl_table,
+          bold = snap_payload_data_code_item.bold,
+          italic = snap_payload_data_code_item.italic,
+          underline = snap_payload_data_code_item.underline,
+          hl_name = hl_name,
         })
       else
         table.insert(line_items, {
@@ -628,7 +816,7 @@ local function get_backend_payload_from_buf(opts)
           bold = false,
           italic = false,
           underline = false,
-          hl_table = {},
+          hl_name = hl_name,
         })
       end
     end

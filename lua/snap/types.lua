@@ -1,7 +1,7 @@
 local M = {}
 
 ---@enum SnapConfigNotifyProvider
-M.SnapConfigTemplate = {
+M.SnapNotifyProvider = {
   notify = "notify",
   print = "print",
 }
@@ -10,6 +10,7 @@ M.SnapConfigTemplate = {
 M.SnapConfigTemplate = {
   default = "default",
   macos = "macos",
+  linux = "linux",
 }
 
 ---@enum SnapPayloadType
@@ -88,7 +89,7 @@ M.SnapConfigFontSettingsFont = {
 ---@field bold boolean Whether the text is bold
 ---@field italic boolean Whether the text is italic
 ---@field underline boolean Whether the text is underlined
----@field hl_table table Highlight definition table
+---@field hl_name string Neovim highlight group name associated with this code item
 
 ---@class SnapPayloadData
 ---@field theme SnapPayloadDataTheme Theme colors for the screenshot

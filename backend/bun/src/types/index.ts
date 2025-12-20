@@ -38,7 +38,7 @@ export interface JSONObjectCodeLine {
   bold: boolean;
   italic: boolean;
   underline: boolean;
-  hl_table: unknown;
+  hl_name: string;
 }
 
 export interface JSONObjectHTMLSuccessRequest {
