@@ -1,6 +1,24 @@
 import { mkdir } from "node:fs/promises";
 
-export const getOutputDir = async (): Promise<string> => {
+const replaceProcessEnv = (input: string): string => {
+  return input.replace(/\$([A-Z_]+)/g, (_, varName) => {
+    return process.env[varName] || "";
+  });
+};
+
+export const getOutputDir = async (
+  userConfigOutDir?: string,
+): Promise<string> => {
+  if (userConfigOutDir) {
+    if (userConfigOutDir.startsWith("~")) {
+      const homeDir = process.env.HOME || process.env.USERPROFILE || null;
+      if (!homeDir) {
+        throw new Error("Could not determine the user's home directory.");
+      }
+      userConfigOutDir = userConfigOutDir.replace("~", homeDir);
+    }
+    return replaceProcessEnv(userConfigOutDir);
+  }
   const homeDir = process.env.HOME || process.env.USERPROFILE || null;
   if (!homeDir) {
     throw new Error("Could not determine the user's home directory.");
@@ -20,7 +38,7 @@ export const getFullOutputPath = async (
   filename: string,
   filenamePattern: string,
 ): Promise<string> => {
-  if (!outputDir) outputDir = await getOutputDir();
+  outputDir = await getOutputDir(outputDir);
   return `${outputDir.replace(/\/+$/, "")}/${generateFilename(
     filenamePattern,
     filename,

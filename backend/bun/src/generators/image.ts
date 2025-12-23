@@ -13,7 +13,7 @@ export const ImageGenerator = async (
   json: JSONObjectImageSuccessRequest,
 ): Promise<[NodeHTMLToImageBuffer, string]> => {
   // HTMLGenerator already handles font size conversion and generates the HTML
-  const code = await HTMLGenerator(
+  const [code] = await HTMLGenerator(
     json as unknown as JSONObjectHTMLSuccessRequest,
   );
 
