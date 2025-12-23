@@ -51,25 +51,30 @@
 		</div>
 	</div>
 </div>
-<div id="comparison" class="hero bg-base-200 min-h-screen">
-	<div class="hero-content text-center">
-		<div class="min-w-screen">
-			<h1 class="text-5xl font-bold">Comparison 📸</h1>
-			<p class="py-6">On the left side, there is "a real screenshot" with an external tool.</p>
-			<p class="py-6">And on the right side, there is "a snap" screenshot via Snap.nvim.</p>
-			<figure class="diff aspect-16/9">
-				<div class="diff-item-1" role="img">
-					<div class="bg-accent grid place-content-center">
-						<img class="object-scale-down" src="/screenshots/screenshot_luadocs.png" alt="Screenshot of Luadocs" />
-					</div>
+<div id="comparison" class="bg-base-200 min-h-screen flex flex-col justify-center">
+	<div class="text-center mb-10">
+		<h1 class="text-5xl font-bold">Comparison 📸</h1>
+		<p class="pt-6">On the left side, there is "a real screenshot" with an external tool.</p>
+		<p class="pt-6">And on the right side, there is "a snap" screenshot via Snap.nvim.</p>
+	</div>
+	<div class="text-center">
+		<figure class="diff aspect-4/3">
+			<div class="diff-item-1" role="img">
+				<div class="bg-accent grid place-content-center object-contain">
+					<img
+						src="/screenshots/screenshot_jsdoc_todo_comment.png"
+						alt="Screenshot of Luadocs"
+					/>
 				</div>
-				<div class="diff-item-2" role="img">
-					<div class="bg-accent grid place-content-center">
-						<img class="object-scale-down" src="/screenshots/snap_luadocs.png" alt="Snap of Luadocs" />
-					</div>
+			</div>
+			<div class="diff-item-2" role="img">
+				<div class="bg-accent grid place-content-center object-contain">
+					<img src="/screenshots/snap_jsdoc_todo_comment.png" alt="Snap of Luadocs" />
 				</div>
-				<div class="diff-resizer"></div>
-			</figure>
+			</div>
+			<div class="diff-resizer"></div>
+		</figure>
+		<div class="text-center">
 			<p>
 				<a href="#get-involved" on:click={handleAnchorClick}
 					><button class="btn btn-secondary mt-5">Get involved</button></a
