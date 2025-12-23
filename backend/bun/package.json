@@ -8,5 +8,8 @@
     "format": "prettier --write .",
     "prepublishOnly": "npm run build && npm run lint"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@types/puppeteer": "7.0.4"
+  }
 }

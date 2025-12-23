@@ -55,7 +55,6 @@ M.SnapConfigFontSettingsFont = {
 ---@field end_line number End line (1-based)
 
 ---@class SnapExportOptions
----@field filepath string|nil Absolute path to save the exported screenshot
 ---@field range SnapVisualRange|nil Visual range for taking a screenshot (optional)
 ---@field type SnapPayloadType|nil Type of screenshot to take ("image" or "html", defaults to "image" if nil)
 

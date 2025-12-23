@@ -91,7 +91,7 @@ local function run_backend_export(opts, export_type, success_message)
             return
           end
           if res.success then
-            Logger.info(string.format(success_message, tostring(res.data.filepath)))
+            Logger.notify(string.format(success_message, tostring(res.data.filepath)), Logger.INFO)
           else
             print("Backend error when exporting failed: " .. vim.inspect(res))
           end
@@ -132,21 +132,12 @@ end
 ---@param opts SnapExportOptions|nil Export options
 function M.image_to_clipboard(opts)
   opts = opts or {}
-  local user_config = Config.get()
   local save_path = M.get_default_save_path()
   if not save_path then
     Logger.error("No valid save path found for screenshots. Please set 'output_dir' in config")
     return
   end
-  local filename = user_config.filename_pattern
-      and (user_config.filename_pattern:gsub("%%t", os.date("%Y%m%d_%H%M%S")) or user_config.filename_pattern)
-    or nil
-  if not filename then
-    Logger.error("Filename pattern is not set correctly.")
-    return
-  end
-  local filepath = save_path and filename and (save_path .. "/" .. filename .. ".png") or ""
-  run_backend_export({ range = opts.range, filepath = filepath }, types.SnapPayloadType.image, "Exported image to: %s")
+  run_backend_export({ range = opts.range }, types.SnapPayloadType.image, "Exported image to: %s")
 end
 
 return M
