@@ -67,10 +67,17 @@ export interface JSONObjectHTMLSuccessRequest {
     templateFilepath?: string;
     fontSettings: FontSettings;
     additionalTemplateData?: { [key: string]: unknown };
-    toClipboard: boolean;
+    toClipboard: {
+      image: boolean;
+      html: boolean;
+      css: boolean;
+      rtf: boolean;
+    };
+    outputDir?: string;
+    filename: string;
+    filenamePattern: string;
     transparent: boolean;
     code: Array<JSONObjectCodeLine[]>;
-    filepath: string;
     minWidth: number;
     dpi?: number;
   };
@@ -89,11 +96,19 @@ export interface JSONObjectRTFSuccessRequest {
     templateFilepath?: string;
     fontSettings: FontSettings;
     additionalTemplateData?: { [key: string]: unknown };
-    toClipboard: boolean;
+    toClipboard: {
+      image: boolean;
+      html: boolean;
+      css: boolean;
+      rtf: boolean;
+    };
+    outputDir?: string;
+    filename: string;
+    filenamePattern: string;
     transparent: boolean;
     code: Array<JSONObjectCodeLine[]>;
-    filepath: string;
     minWidth: number;
+    dpi?: number;
   };
 }
 
@@ -112,10 +127,17 @@ export interface JSONObjectImageSuccessRequest {
     fontSettings: FontSettings;
     templateFilepath?: string;
     additionalTemplateData?: { [key: string]: unknown };
-    toClipboard: boolean;
+    toClipboard: {
+      image: boolean;
+      html: boolean;
+      css: boolean;
+      rtf: boolean;
+    };
+    outputDir?: string;
+    filename: string;
+    filenamePattern: string;
     transparent: boolean;
     code: Array<JSONObjectCodeLine[]>;
-    filepath: string;
     minWidth: number;
     dpi?: number;
   };
@@ -143,8 +165,9 @@ export interface JSONObjectSuccessResponse {
   debug: boolean;
   context?: unknown;
   data:
-    | JSONObjectImageSuccessRequest["data"]
-    | JSONObjectHTMLSuccessRequest["data"];
+    | (JSONObjectImageSuccessRequest["data"] & { filepath: string })
+    | (JSONObjectRTFSuccessRequest["data"] & { filepath: string })
+    | (JSONObjectHTMLSuccessRequest["data"] & { filepath: string });
 }
 
 export interface JSONObjectErrorResponse {

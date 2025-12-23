@@ -28,36 +28,46 @@ const main = async () => {
     | JSONObjectRTFSuccessRequest;
 
   let bufstr: NodeHTMLToImageBuffer | Buffer | string | null = null;
+  let filepath: string = "";
 
   switch (jsonPayload.data.type) {
     case JSONRequestType.CodeImageGeneration:
       json = jsonPayload as JSONObjectImageSuccessRequest;
-      bufstr = await ImageGenerator(json);
+      [bufstr, filepath] = await ImageGenerator(json);
+      if (bufstr && json.data.toClipboard.image) {
+        Clipboard.write(bufstr, "image/png");
+      }
       break;
     case JSONRequestType.CodeHTMLGeneration:
       json = jsonPayload as JSONObjectHTMLSuccessRequest;
-      bufstr = await HTMLGenerator(json);
+      [bufstr, filepath] = await HTMLGenerator(json, true);
+      if (bufstr && json.data.toClipboard.html) {
+        Clipboard.write(bufstr, "text/html");
+      }
       break;
     case JSONRequestType.CodeRTFGeneration:
       json = jsonPayload as JSONObjectRTFSuccessRequest;
-      bufstr = RTFGenerator(json);
+      [bufstr, filepath] = await RTFGenerator(json);
+      if (bufstr && json.data.toClipboard.rtf) {
+        Clipboard.write(bufstr, "text/rtf");
+      }
       break;
     default:
       writeJSONToStdout({
         success: false,
-        error: `Unknown request type: ${jsonPayload.data.type}`,
+        error: "Unknown request type",
+        context: jsonPayload,
       });
       return;
-  }
-
-  if (bufstr && json.data.toClipboard) {
-    Clipboard.write(bufstr, "image/png");
   }
 
   writeJSONToStdout({
     success: true,
     debug: json.debug,
-    data: json.data,
+    data: {
+      ...json.data,
+      filepath,
+    },
   });
 };
 

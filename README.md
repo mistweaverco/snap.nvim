@@ -55,7 +55,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.2.0',
+  version = 'v1.2.1',
   ---@type SnapUserConfig
   opts = {}
 },
@@ -71,7 +71,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/snap.nvim',
-  tag = 'v1.2.0',
+  tag = 'v1.2.1',
   config = function()
 
     ---@type SnapUserConfig
@@ -90,7 +90,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/snap.nvim.git',
-  version = 'v1.2.0',
+  version = 'v1.2.1',
 })
 ---@type SnapUserConfig
 local cfg = {}
@@ -222,7 +222,7 @@ This would then translate to the following `font_settings`:
 ```lua
 return {
   "mistweaverco/snap.nvim",
-  version = "v1.2.0",
+  version = "v1.2.1",
   ---@type SnapUserConfig
   opts = {
     template = "linux",
@@ -274,6 +274,11 @@ File extension will be added automatically based on the output format.
 Supports the following placeholders:
 
 - `%t` - Timestamp in `YYYYMMDD_HHMMSS` format
+- `%time` - Time in `HHMMSS` format, e.g., `153045`
+- `%date` - Date in `YYYYMMDD` format, e.g., `20210702`
+- `%file_name` - Original filename, e.g., `my_script`
+- `%file_extension` - Original file extension, e.g., `lua`, `py`, `js`
+- `%unixtime` - Unix timestamp, e.g., `1625247600`
 
 ### Configure `template`
 
@@ -328,7 +333,7 @@ by running `bun install` in the plugin directory.
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.2.0',
+  version = 'v1.2.1',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
     template = "default", -- Template to use for rendering screenshots (currently only "default" is supported)

@@ -7,31 +7,31 @@ import type {
   NodeHTMLToImageBuffer,
 } from "./../types";
 import { HTMLGenerator } from ".";
+import { getFullOutputPath } from "../utils/file";
 
 export const ImageGenerator = async (
   json: JSONObjectImageSuccessRequest,
-): Promise<NodeHTMLToImageBuffer> => {
+): Promise<[NodeHTMLToImageBuffer, string]> => {
   // HTMLGenerator already handles font size conversion and generates the HTML
   const code = await HTMLGenerator(
     json as unknown as JSONObjectHTMLSuccessRequest,
   );
 
-  // NOTE:
-  // For debugging purposes, we write the generated HTML to a file
-  // so that developers can inspect it if needed.
-  if (json.debug) {
-    fs.writeFileSync(
-      json.data.filepath.replace(/\.(png|jpeg|jpg)$/, "_debug.html"),
-      code,
-      { encoding: "utf-8" },
-    );
-  }
+  const outputFilepath = await getFullOutputPath(
+    json.data.outputDir,
+    json.data.filename,
+    json.data.filenamePattern,
+  );
 
+  const filepath = outputFilepath + "." + json.data.outputImageFormat;
   // The HTML is already fully generated with correct font sizes, so we just pass it to nodeHtmlToImage
-  return await nodeHtmlToImage({
-    output: json.data.filepath,
-    html: code,
-    transparent: json.data.transparent,
-    type: json.data.outputImageFormat,
-  });
+  return [
+    await nodeHtmlToImage({
+      output: filepath,
+      html: code,
+      transparent: json.data.transparent,
+      type: json.data.outputImageFormat,
+    }),
+    filepath,
+  ];
 };
