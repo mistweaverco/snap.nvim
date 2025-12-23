@@ -4,15 +4,15 @@ local view = require("snap.view")
 
 local M = {}
 
-local DEFAULT_BG = utils.get_default_bg()
-local DEFAULT_FG = utils.get_default_fg()
-
 ---Merge multiple highlight definitions, with higher priority taking precedence
 ---for each attribute. Attributes from lower priority highlights are preserved if not specified in
 ---higher priority highlights. When priorities are equal, the last one added (higher index) wins.
 ---@param highlights table Array of {hl_group = string, priority = number}
 ---@return table|nil Merged highlight definition table (normalized with defaults) or nil
 function M.merge_highlights(highlights)
+  local default_bg = utils.get_default_bg()
+  local default_fg = utils.get_default_fg()
+
   if not highlights or #highlights == 0 then
     return nil
   end
@@ -89,12 +89,12 @@ function M.merge_highlights(highlights)
   if merged_raw.fg then
     merged.fg = utils.convert_color_to_hex(merged_raw.fg)
   else
-    merged.fg = DEFAULT_FG
+    merged.fg = default_fg
   end
   if merged_raw.bg then
     merged.bg = utils.convert_color_to_hex(merged_raw.bg)
   else
-    merged.bg = DEFAULT_BG
+    merged.bg = default_bg
   end
   merged.bold = merged_raw.bold or false
   merged.italic = merged_raw.italic or false

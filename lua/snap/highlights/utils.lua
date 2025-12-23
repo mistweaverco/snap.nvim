@@ -7,31 +7,35 @@ function M.convert_color_to_hex(color)
   return string.format("#%06x", color)
 end
 
-local DEFAULT_BG = "#000000"
-pcall(function()
-  local bg = vim.api.nvim_get_hl(0, { name = "Normal" }).bg
-  if bg then
-    DEFAULT_BG = M.convert_color_to_hex(bg)
-  end
-end)
-
-local DEFAULT_FG = "#ffffff"
-pcall(function()
-  local fg = vim.api.nvim_get_hl(0, { name = "Normal" }).fg
-  if fg then
-    DEFAULT_FG = M.convert_color_to_hex(fg)
-  end
-end)
+local DEFAULT_BG = nil
+local DEFAULT_FG = nil
 
 ---Get default background color
 ---@return string Default background color
 function M.get_default_bg()
+  if DEFAULT_BG ~= nil then
+    return DEFAULT_BG
+  end
+  DEFAULT_BG = "#000000"
+  local hl = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+  if hl.bg then
+    DEFAULT_BG = M.convert_color_to_hex(hl.bg)
+    print("Default BG:", DEFAULT_BG)
+  end
   return DEFAULT_BG
 end
 
 ---Get default foreground color
 ---@return string Default foreground color
 function M.get_default_fg()
+  if DEFAULT_FG ~= nil then
+    return DEFAULT_FG
+  end
+  DEFAULT_FG = "#ffffff"
+  local fg = vim.api.nvim_get_hl(0, { name = "Normal", link = false }).fg
+  if fg then
+    DEFAULT_FG = M.convert_color_to_hex(fg)
+  end
   return DEFAULT_FG
 end
 

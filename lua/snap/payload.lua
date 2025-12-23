@@ -7,20 +7,20 @@ local UIBlock = require("snap.ui.block")
 
 local M = {}
 
-local DEFAULT_BG = highlights_utils.get_default_bg()
-local DEFAULT_FG = highlights_utils.get_default_fg()
-
 ---Convert highlight definition table to CSS style string
 ---@param t table|nil Highlight definition table
 ---@param text string Text content (for future use)
 ---@return SnapPayloadDataCodeItem|nil Highlight style or nil
 local function get_snap_payload_data_code_item(t, text)
+  local default_bg = highlights_utils.get_default_bg()
+  local default_fg = highlights_utils.get_default_fg()
+
   if not t then
     return nil
   end
   return {
-    fg = t.fg or DEFAULT_FG,
-    bg = t.bg or DEFAULT_BG,
+    fg = t.fg or default_fg,
+    bg = t.bg or default_bg,
     text = text,
     bold = t.bold or false,
     italic = t.italic or false,
@@ -56,6 +56,9 @@ end
 function M.get_backend_payload_from_buf(opts, callback)
   opts = opts or {}
 
+  local default_bg = highlights_utils.get_default_bg()
+  local default_fg = highlights_utils.get_default_fg()
+
   local user_config = Config.get()
   local bufnr = vim.api.nvim_get_current_buf()
   local filepath = opts.filepath or M.default_output_path(bufnr)
@@ -74,8 +77,8 @@ function M.get_backend_payload_from_buf(opts, callback)
       additional_template_data = user_config.additional_template_data or {},
       code = {},
       theme = {
-        bgColor = DEFAULT_BG,
-        fgColor = DEFAULT_FG,
+        bgColor = default_bg,
+        fgColor = default_fg,
       },
       template = user_config.template or "default",
       toClipboard = true,
@@ -143,8 +146,8 @@ function M.get_backend_payload_from_buf(opts, callback)
         if not hl_attrs then
           hl_attrs = {
             hl_group = "Normal",
-            fg = DEFAULT_FG,
-            bg = DEFAULT_BG,
+            fg = default_fg,
+            bg = default_bg,
             bold = false,
             italic = false,
             underline = false,
@@ -172,8 +175,8 @@ function M.get_backend_payload_from_buf(opts, callback)
               })
             else
               table.insert(line_items, {
-                fg = DEFAULT_FG,
-                bg = DEFAULT_BG,
+                fg = default_fg,
+                bg = default_bg,
                 text = current_segment,
                 bold = false,
                 italic = false,
@@ -219,8 +222,8 @@ function M.get_backend_payload_from_buf(opts, callback)
             })
           else
             table.insert(line_items, {
-              fg = DEFAULT_FG,
-              bg = DEFAULT_BG,
+              fg = default_fg,
+              bg = default_bg,
               text = current_segment,
               bold = false,
               italic = false,
@@ -314,8 +317,8 @@ function M.get_backend_payload_from_buf(opts, callback)
         if not hl_attrs then
           hl_attrs = {
             hl_group = "Normal",
-            fg = DEFAULT_FG,
-            bg = DEFAULT_BG,
+            fg = default_fg,
+            bg = default_bg,
             bold = false,
             italic = false,
             underline = false,
@@ -343,8 +346,8 @@ function M.get_backend_payload_from_buf(opts, callback)
               })
             else
               table.insert(line_items, {
-                fg = DEFAULT_FG,
-                bg = DEFAULT_BG,
+                fg = default_fg,
+                bg = default_bg,
                 text = current_segment,
                 bold = false,
                 italic = false,
@@ -381,8 +384,8 @@ function M.get_backend_payload_from_buf(opts, callback)
           })
         else
           table.insert(line_items, {
-            fg = DEFAULT_FG,
-            bg = DEFAULT_BG,
+            fg = default_fg,
+            bg = default_bg,
             text = current_segment,
             bold = false,
             italic = false,
