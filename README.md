@@ -56,6 +56,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 {
   'mistweaverco/snap.nvim',
   version = 'v1.2.0',
+  ---@type SnapUserConfig
   opts = {}
 },
 ```
@@ -72,7 +73,10 @@ use {
   'mistweaverco/snap.nvim',
   tag = 'v1.2.0',
   config = function()
-    require('snap').setup({})
+
+    ---@type SnapUserConfig
+    local cfg = {}
+    require('snap').setup(cfg)
   end
 })
 ```
@@ -88,7 +92,9 @@ vim.pack.add({
   src = 'https://github.com/mistweaverco/snap.nvim.git',
   version = 'v1.2.0',
 })
-require('snap').setup({})
+---@type SnapUserConfig
+local cfg = {}
+require('snap').setup(cfg)
 ```
 
 > [!IMPORTANT]
@@ -120,7 +126,7 @@ Optional. Defaults to:
 ```lua
 {
   size = 14, -- Default font size for the screenshot in pt
-  line_height = 1, -- Default line height for the screenshot in pt
+  line_height = 1.0, -- Default line height for the screenshot in pt
   default = {
     name = "FiraCode Nerd Font",
     file = nil,
@@ -216,8 +222,8 @@ This would then translate to the following `font_settings`:
 ```lua
 return {
   "mistweaverco/snap.nvim",
-  version = "v1.0.0",
-  ---@type snap.SnapUserConfig
+  version = "v1.2.0",
+  ---@type SnapUserConfig
   opts = {
     template = "linux",
     font_settings = {
@@ -317,7 +323,7 @@ by running `bun install` in the plugin directory.
 }
 ```
 
-### Full Example Configuration
+### Full example configuration
 
 ```lua
 {
