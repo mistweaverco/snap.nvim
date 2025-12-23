@@ -25,8 +25,8 @@ M.defaults = {
     provider = "notify", -- Notification provider: "notify", "print"
   },
   font_settings = {
-    size = 14, -- Default font size for the screenshot
-    line_height = 12, -- Default line height for the screenshot
+    size = 14, -- Default font size for the screenshot in pt
+    line_height = 1.0, -- Default line height for the screenshot in pt
     fonts = {
       default = {
         name = "FiraCode Nerd Font", -- Default font name for the screenshot

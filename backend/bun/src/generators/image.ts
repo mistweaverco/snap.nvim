@@ -11,6 +11,7 @@ import { HTMLGenerator } from ".";
 export const ImageGenerator = async (
   json: JSONObjectImageSuccessRequest,
 ): Promise<NodeHTMLToImageBuffer> => {
+  // HTMLGenerator already handles font size conversion and generates the HTML
   const code = await HTMLGenerator(
     json as unknown as JSONObjectHTMLSuccessRequest,
   );
@@ -26,16 +27,10 @@ export const ImageGenerator = async (
     );
   }
 
+  // The HTML is already fully generated with correct font sizes, so we just pass it to nodeHtmlToImage
   return await nodeHtmlToImage({
     output: json.data.filepath,
     html: code,
-    content: {
-      code,
-      fontSettings: json.data.fontSettings,
-      theme: json.data.theme,
-      minWidth: json.data.minWidth,
-      data: { ...json.data.additionalTemplateData },
-    },
     transparent: json.data.transparent,
     type: json.data.outputImageFormat,
   });

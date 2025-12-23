@@ -1,6 +1,7 @@
 {
   "name": "snap-nvim",
   "private": true,
+  "type": "module",
   "packageManager": "bun@1.3.3",
   "workspaces": [
     "backend/bun"
@@ -12,6 +13,7 @@
     "@eslint/markdown": "7.5.1",
     "@types/bun": "1.3.3",
     "eslint": "9.39.1",
+    "file-type": "21.1.1",
     "globals": "16.5.0",
     "handlebars": "4.7.8",
     "node-html-to-image": "5.0.0",

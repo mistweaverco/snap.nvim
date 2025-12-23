@@ -55,7 +55,8 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.0.3',
+  version = 'v1.2.0',
+  ---@type SnapUserConfig
   opts = {}
 },
 ```
@@ -70,9 +71,12 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/snap.nvim',
-  tag = 'v1.0.3',
+  tag = 'v1.2.0',
   config = function()
-    require('snap').setup({})
+
+    ---@type SnapUserConfig
+    local cfg = {}
+    require('snap').setup(cfg)
   end
 })
 ```
@@ -86,9 +90,11 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/snap.nvim.git',
-  version = 'v1.0.3',
+  version = 'v1.2.0',
 })
-require('snap').setup({})
+---@type SnapUserConfig
+local cfg = {}
+require('snap').setup(cfg)
 ```
 
 > [!IMPORTANT]
@@ -119,8 +125,8 @@ Optional. Defaults to:
 
 ```lua
 {
-  size = 14,
-  line_height = 0.8,
+  size = 14, -- Default font size for the screenshot in pt
+  line_height = 1.0, -- Default line height for the screenshot in pt
   default = {
     name = "FiraCode Nerd Font",
     file = nil,
@@ -148,6 +154,103 @@ matches your Neovim setup.
 
 We can't detect your font settings (of your terminal) automatically,
 so you need to specify them manually.
+
+For wezterm, this is what it could look like in your wezterm config:
+
+```lua
+local wezterm = require("wezterm")
+
+local config = wezterm.config_builder()
+
+config.font = wezterm.font_with_fallback({
+  "FiraCode Nerd Font",
+  "VictorMono Nerd Font",
+  "Noto Color Emoji",
+})
+
+config.font_rules = {
+  {
+    italic = true,
+    intensity = "Normal",
+    font = wezterm.font({
+      family = "VictorMono Nerd Font",
+      stretch = "Normal",
+      weight = "Regular",
+      style = "Italic",
+    }),
+  },
+  {
+    italic = true,
+    intensity = "Bold",
+    font = wezterm.font({
+      family = "VictorMono Nerd Font",
+      stretch = "Normal",
+      weight = "Bold",
+      style = "Italic",
+    }),
+  },
+  {
+    italic = false,
+    intensity = "Normal",
+    font = wezterm.font({
+      family = "FiraCode Nerd Font",
+      stretch = "Normal",
+      weight = "Regular",
+      style = "Normal",
+    }),
+  },
+  {
+    italic = false,
+    intensity = "Bold",
+    font = wezterm.font({
+      family = "FiraCode Nerd Font",
+      stretch = "Normal",
+      weight = "Bold",
+      style = "Normal",
+    }),
+  },
+}
+
+config.font_size = 14.0
+config.line_height = 1.0
+
+return config
+```
+
+This would then translate to the following `font_settings`:
+
+```lua
+return {
+  "mistweaverco/snap.nvim",
+  version = "v1.2.0",
+  ---@type SnapUserConfig
+  opts = {
+    template = "linux",
+    font_settings = {
+      size = 14,
+      line_height = 1.0,
+      fonts = {
+        default = {
+          name = "FiraCode Nerd Font",
+          file = nil,
+        },
+        bold = {
+          name = "VictorMono Nerd Font",
+          file = nil,
+        },
+        italic = {
+          name = "VictorMono Nerd Font",
+          file = nil,
+        },
+        bold_italic = {
+          name = "VictorMono Nerd Font",
+          file = nil,
+        },
+      },
+    },
+  },
+}
+```
 
 ### Configure `timeout`
 
@@ -220,12 +323,12 @@ by running `bun install` in the plugin directory.
 }
 ```
 
-### Full Example Configuration
+### Full example configuration
 
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.0.3',
+  version = 'v1.2.0',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
     template = "default", -- Template to use for rendering screenshots (currently only "default" is supported)
@@ -242,8 +345,8 @@ by running `bun install` in the plugin directory.
         html = true, -- Whether to copy the HTML to clipboard
     },
     font_settings = {
-      size = 14,         -- Default font size for the screenshot
-      line_height = 0.8, -- Default line height for the screenshot
+      size = 14,         -- Default font size for the screenshot in pt
+      line_height = 1.0, -- Default line height for the screenshot in pt
       default = {
         name = "FiraCode Nerd Font", -- Default font name for the screenshot
         file = nil,         -- Absolute path to a custom font file (.ttf) (optional)
