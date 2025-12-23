@@ -55,7 +55,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.2.1',
+  version = 'v1.2.2',
   ---@type SnapUserConfig
   opts = {}
 },
@@ -71,7 +71,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/snap.nvim',
-  tag = 'v1.2.1',
+  tag = 'v1.2.2',
   config = function()
 
     ---@type SnapUserConfig
@@ -90,7 +90,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/snap.nvim.git',
-  version = 'v1.2.1',
+  version = 'v1.2.2',
 })
 ---@type SnapUserConfig
 local cfg = {}
@@ -109,7 +109,7 @@ Optional. Defaults to `nil`.
 
 Absolute path to a custom handlebars template file.
 
-See the [default template](./templates/default.hbs) for reference.
+See the [builtin templates](./templates/) for reference.
 
 ### Configure `additional_template_data`
 
@@ -222,7 +222,7 @@ This would then translate to the following `font_settings`:
 ```lua
 return {
   "mistweaverco/snap.nvim",
-  version = "v1.2.1",
+  version = "v1.2.2",
   ---@type SnapUserConfig
   opts = {
     template = "linux",
@@ -333,10 +333,10 @@ by running `bun install` in the plugin directory.
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.2.1',
+  version = 'v1.2.2',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
-    template = "default", -- Template to use for rendering screenshots (currently only "default" is supported)
+    template = "default", -- Template to use for rendering screenshots ("default", "macos", "linux")
     template_filepath = nil, -- Absolute path to a custom handlebars template file (optional), overrides 'template' option
     -- Additional data to pass to the your custom handlebars template (optional)
     additional_template_data = {
