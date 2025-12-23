@@ -2,6 +2,7 @@ import fs from "fs";
 import Handlebars from "handlebars";
 import { type JSONObjectHTMLSuccessRequest } from "./../types";
 import { Template } from "../templates";
+import { getFullOutputPath } from "../utils/file";
 
 export const HandlebarsGenerator = (
   html: string,
@@ -40,7 +41,8 @@ const escapeHTML = (str: string): string => {
  */
 export const HTMLGenerator = async (
   json: JSONObjectHTMLSuccessRequest,
-): Promise<string> => {
+  writeFile: boolean = false,
+): Promise<[string, string]> => {
   const html = json.data.code
     .map((line) => {
       return line
@@ -65,10 +67,22 @@ export const HTMLGenerator = async (
         : `<span class="code-line">${line}</span>`,
     )
     .join("\n");
-  const template = await Template(html, json);
-  fs.writeFileSync(json.data.filepath, template, {
-    encoding: "utf-8",
-  });
 
-  return template;
+  const template = await Template(html, json);
+
+  const outputFilepath = await getFullOutputPath(
+    json.data.outputDir,
+    json.data.filename,
+    json.data.filenamePattern,
+  );
+
+  const filepath = outputFilepath + ".html";
+
+  if (writeFile) {
+    fs.writeFileSync(filepath, template, {
+      encoding: "utf-8",
+    });
+  }
+
+  return [template, filepath];
 };

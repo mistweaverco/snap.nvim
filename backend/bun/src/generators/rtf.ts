@@ -3,6 +3,7 @@ import type {
   JSONObjectCodeLine,
   JSONObjectRTFSuccessRequest,
 } from "./../types";
+import { getFullOutputPath } from "../utils/file";
 
 let colorTable: string[] = [];
 
@@ -100,7 +101,9 @@ function pxToTwips(px: number): number {
   return px * TWIPS_PER_PIXEL;
 }
 
-export const RTFGenerator = (json: JSONObjectRTFSuccessRequest): string => {
+export const RTFGenerator = async (
+  json: JSONObjectRTFSuccessRequest,
+): Promise<[string, string]> => {
   colorTable = buildColorTable(json);
 
   // Global document settings: font size (\fs), line height (\sl),
@@ -122,6 +125,15 @@ export const RTFGenerator = (json: JSONObjectRTFSuccessRequest): string => {
   const doc = `{\\rtf1\\ansi\\deff0\n${headerSettings}\n${generateFontTable(
     json,
   )}\n${generateColorTable()}\n${docDefaults}\n${body}\\par\n}`;
-  fs.writeFileSync(json.data.filepath + ".rtf", doc, { encoding: "utf-8" });
-  return doc;
+
+  const outputFilepath = await getFullOutputPath(
+    json.data.outputDir,
+    json.data.filename,
+    json.data.filenamePattern,
+  );
+
+  const filepath = outputFilepath + ".rtf";
+
+  fs.writeFileSync(filepath, doc, { encoding: "utf-8" });
+  return [doc, filepath];
 };

@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 type MimeType =
   | "text/plain"
   | "text/html"
+  | "text/rtf"
   | "image/png"
   | "image/jpeg"
   | "application/json";
@@ -53,7 +54,7 @@ export const Clipboard = {
         ];
       }
     } else if (platform === "linux") {
-      const tool = await getLinuxTool();
+      const tool = getLinuxTool();
       if (tool === "wayland") {
         cmd = ["wl-paste", "--type", mimeType, "--no-newline"];
       } else if (tool === "xclip") {

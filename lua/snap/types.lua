@@ -93,16 +93,19 @@ M.SnapConfigFontSettingsFont = {
 
 ---@class SnapPayloadData
 ---@field theme SnapPayloadDataTheme Theme colors for the screenshot
----@field additional_template_data table
+---@field additionalTemplateData table
 ---@field code table<number, table<SnapPayloadDataCodeItem>> Code lines for the screenshot,
 ---keyed by line number (1-based), each value is a table of SnapPayloadDataCodeItem, for each segment of the line
----@field filepath string
+---@field outputDir string|nil Absolute output directory for the screenshot
+---@field filename string Generated filename for the screenshot
+---@field filenamePattern string Screenshot filename pattern
 ---@field fontSettings SnapConfigFontSettings
 ---@field minWidth number Minimum width in pixels based on longest line
 ---@field outputImageFormat SnapImageOutputFormat
 ---@field templateFilepath string|nil
 ---@field transparent boolean
 ---@field type SnapPayloadType
+---@field toClipboard SnapConfigCopyToClipboard Whether to copy to clipboard
 
 ---@class SnapPayload
 ---@field success boolean Whether the screenshot operation was successful

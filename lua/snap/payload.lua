@@ -29,16 +29,15 @@ local function get_snap_payload_data_code_item(t, text)
   }
 end
 
----Get default output path for buffer
+---Get filename including extension for current buffer
 ---@param bufnr number Buffer number
 ---@return string Output file path
-function M.default_output_path(bufnr)
+function M.get_filename(bufnr)
   local name = vim.api.nvim_buf_get_name(bufnr)
   if name == "" then
     name = "untitled"
   end
-  local fname = vim.fn.fnamemodify(name, ":t")
-  return vim.fn.getcwd() .. "/" .. fname .. ".html"
+  return vim.fn.fnamemodify(name, ":t")
 end
 
 local get_absolute_plugin_path = function(...)
@@ -61,7 +60,6 @@ function M.get_backend_payload_from_buf(opts, callback)
 
   local user_config = Config.get()
   local bufnr = vim.api.nvim_get_current_buf()
-  local filepath = opts.filepath or M.default_output_path(bufnr)
   -- Save current view and cursor to restore later
   local view = vim.fn.winsaveview()
   local original_cursor = vim.api.nvim_win_get_cursor(vim.api.nvim_get_current_win())
@@ -74,18 +72,20 @@ function M.get_backend_payload_from_buf(opts, callback)
     success = true,
     debug = user_config.debug and true or false,
     data = {
-      additional_template_data = user_config.additional_template_data or {},
+      additionalTemplateData = user_config.additional_template_data or {},
       code = {},
       theme = {
         bgColor = default_bg,
         fgColor = default_fg,
       },
       template = user_config.template or "default",
-      toClipboard = true,
-      filepath = filepath,
+      toClipboard = user_config.copy_to_clipboard or Config.defaults.copy_to_clipboard,
+      outputDir = user_config.output_dir or Config.defaults.output_dir,
+      filename = M.get_filename(bufnr),
+      filenamePattern = user_config.filename_pattern or Config.defaults.filename_pattern,
       fontSettings = user_config.font_settings or Config.defaults.font_settings,
       outputImageFormat = types.SnapImageOutputFormat.png,
-      templateFilepath = user_config.templateFilepath or nil,
+      templateFilepath = user_config.templateFilepath or Config.defaults.templateFilepath,
       transparent = true,
       minWidth = 0,
       type = (opts and opts.type) or types.SnapPayloadType.image,
