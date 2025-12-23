@@ -3,6 +3,8 @@ name: Deploy website
 
 on:
   push:
+    branches:
+      - main
     paths:
       - '.github/workflows/web.yaml'
       - 'web/**'
