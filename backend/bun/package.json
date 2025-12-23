@@ -2,5 +2,11 @@
   "name": "snap-nvim-backend",
   "module": "src/index.ts",
   "type": "module",
+  "scripts": {
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier --write .",
+    "prepublishOnly": "npm run build && npm run lint"
+  },
   "private": true
 }

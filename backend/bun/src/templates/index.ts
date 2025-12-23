@@ -7,6 +7,8 @@ import macOSTemplatePath from "../../../../templates/macos.hbs" with { type: "fi
 import type { JSONObjectHTMLSuccessRequest } from "./../types";
 import { JSONRequestTemplate } from "./../types";
 import { HandlebarsGenerator } from "./../generators";
+import { FontGenerator } from "../generators/font";
+import { ptToPx } from "../utils/display";
 
 export const Template = async (
   html: string,
@@ -32,13 +34,38 @@ export const Template = async (
     }
   }
 
+  const data = {
+    ...json.data.additionalTemplateData,
+  };
+
+  const dpi = json.data.dpi ?? 96;
+
+  // Font size is in points (matching terminal configs like wezterm)
+  // Keep it in points - CSS will handle the rendering
+  const fontSizePt = json.data.fontSettings.size;
+  // No conversion needed - keep in points
+
+  // Line-height: pass through as-is, templates will add 'pt' suffix
+
+  const fontFaceDeclarations =
+    await FontGenerator.getFontFaceDeclarationsFromJSONPayload(json);
+
+  // minWidth calculation: minWidth is calculated in Lua assuming font_size is in pixels,
+  // but font_size is in points. We need to scale minWidth by pt-to-px ratio.
+  // The Lua calculation uses: minWidth = longest_line_len * font_size * 0.6 + padding
+  // If font_size is 14pt but treated as 14px, we need to scale by ptToPx(14pt, dpi) / 14
+  const fontSizePx = ptToPx(fontSizePt, dpi);
+  const ptToPxRatio = fontSizePx / fontSizePt; // This equals dpi / 72
+  const adjustedMinWidth = json.data.minWidth * ptToPxRatio;
+
   return (
     HandlebarsGenerator(tpl, {
       code: html,
       fontSettings: json.data.fontSettings,
+      fontFaceDeclarations,
       theme: json.data.theme,
-      minWidth: json.data.minWidth,
-      data: { ...json.data.additionalTemplateData },
+      minWidth: adjustedMinWidth,
+      data,
     }) ?? ""
   );
 };

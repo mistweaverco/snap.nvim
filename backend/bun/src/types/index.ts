@@ -14,14 +14,21 @@ interface FontSettingsFont {
   file?: string;
 }
 
-interface FontSettings {
+export enum FontSettingsFonts {
+  default = "default",
+  bold = "bold",
+  italic = "italic",
+  bold_italic = "bold_italic",
+}
+
+export interface FontSettings {
   size: number;
   line_height: number;
   fonts: {
-    default: FontSettingsFont;
-    bold: FontSettingsFont;
-    italic: FontSettingsFont;
-    bold_italic: FontSettingsFont;
+    [FontSettingsFonts.default]: FontSettingsFont;
+    [FontSettingsFonts.bold]: FontSettingsFont;
+    [FontSettingsFonts.italic]: FontSettingsFont;
+    [FontSettingsFonts.bold_italic]: FontSettingsFont;
   };
 }
 
@@ -41,6 +48,11 @@ export interface JSONObjectCodeLine {
   hl_name: string;
 }
 
+export interface CSSFontFaceDeclarations {
+  "font-family": string;
+  src: string;
+}
+
 export interface JSONObjectHTMLSuccessRequest {
   success: true;
   debug: boolean;
@@ -50,14 +62,17 @@ export interface JSONObjectHTMLSuccessRequest {
       fgColor: string;
       bgColor: string;
     };
+    fontFaceDeclarations: CSSFontFaceDeclarations[];
     template?: JSONRequestTemplate;
     templateFilepath?: string;
+    fontSettings: FontSettings;
     additionalTemplateData?: { [key: string]: unknown };
     toClipboard: boolean;
     transparent: boolean;
     code: Array<JSONObjectCodeLine[]>;
     filepath: string;
     minWidth: number;
+    dpi?: number;
   };
 }
 
@@ -91,6 +106,7 @@ export interface JSONObjectImageSuccessRequest {
       fgColor: string;
       bgColor: string;
     };
+    fontFaceDeclarations: CSSFontFaceDeclarations[];
     template?: JSONRequestTemplate;
     outputImageFormat: "png" | "jpeg";
     fontSettings: FontSettings;
@@ -101,6 +117,7 @@ export interface JSONObjectImageSuccessRequest {
     code: Array<JSONObjectCodeLine[]>;
     filepath: string;
     minWidth: number;
+    dpi?: number;
   };
 }
 

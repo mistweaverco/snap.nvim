@@ -1,6 +1,6 @@
 import fs from "fs";
 import Handlebars from "handlebars";
-import type { JSONObjectHTMLSuccessRequest } from "./../types";
+import { type JSONObjectHTMLSuccessRequest } from "./../types";
 import { Template } from "../templates";
 
 export const HandlebarsGenerator = (
@@ -61,8 +61,8 @@ export const HTMLGenerator = async (
     })
     .map((line) =>
       line.trim() === ""
-        ? `<div class="code-line">&nbsp;</div>`
-        : `<div class="code-line">${line}</div>`,
+        ? `<span class="code-line">&nbsp;</span>`
+        : `<span class="code-line">${line}</span>`,
     )
     .join("\n");
   const template = await Template(html, json);

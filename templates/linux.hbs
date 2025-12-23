@@ -3,6 +3,14 @@
 <head>
   <meta charset="utf-8">
   <title>snap.nvim</title>
+  {{#each fontFaceDeclarations}}
+  <style>
+    @font-face {
+      font-family: "{{this.name}}";
+      src: {{{this.src}}};
+    }
+  </style>
+  {{/each}}
   <style>
     html, body {
       margin: 0;
@@ -59,21 +67,40 @@
       color: {{theme.fgColor}};
       display: block;
       font-family: '{{fontSettings.fonts.default.name}}', monospace;
-      font-size: {{fontSettings.size}}px;
-      line-height: {{fontSettings.line_height}}px;
+      font-size: {{fontSettings.size}}pt;
       padding: 15px;
       white-space: pre; /* Preserve whitespace formatting */
       word-break: keep-all; /* Prevent breaking words */
+      letter-spacing: 0; /* Ensure equal character width */
+      font-variant-numeric: tabular-nums; /* Equal width for numbers */
+      font-feature-settings: "tnum"; /* Tabular numbers */
+    }
+
+    pre#snap .code-line {
+      margin: 0;
+      padding: 0;
+      line-height: {{fontSettings.line_height}}pt;
+      display: block;
+      margin-bottom: -{{fontSettings.line_height}}px;
     }
 
     pre#snap .code-line i {
       font-family: '{{fontSettings.fonts.italic.name}}', monospace;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
     }
     pre#snap .code-line b {
       font-family: '{{fontSettings.fonts.bold.name}}', monospace;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
     }
     pre#snap .code-line i b {
       font-family: '{{fontSettings.fonts.bold_italic.name}}', monospace;
+      letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum";
     }
   </style>
 </head>

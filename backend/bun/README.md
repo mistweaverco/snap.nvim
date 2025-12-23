@@ -14,4 +14,3 @@ To run:
 ```bash
 echo '{"foo": "bar"}' | bun run src/index.ts
 ```
-
