@@ -20,7 +20,6 @@ function M.get_default_bg()
   local hl = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
   if hl.bg then
     DEFAULT_BG = M.convert_color_to_hex(hl.bg)
-    print("Default BG:", DEFAULT_BG)
   end
   return DEFAULT_BG
 end
