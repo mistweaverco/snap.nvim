@@ -55,7 +55,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.2.3',
+  version = 'v1.3.1',
   ---@type SnapUserConfig
   opts = {}
 },
@@ -71,7 +71,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/snap.nvim',
-  tag = 'v1.2.3',
+  tag = 'v1.3.1',
   config = function()
 
     ---@type SnapUserConfig
@@ -90,7 +90,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/snap.nvim.git',
-  version = 'v1.2.3',
+  version = 'v1.3.1',
 })
 ---@type SnapUserConfig
 local cfg = {}
@@ -222,7 +222,7 @@ This would then translate to the following `font_settings`:
 ```lua
 return {
   "mistweaverco/snap.nvim",
-  version = "v1.2.3",
+  version = "v1.3.1",
   ---@type SnapUserConfig
   opts = {
     template = "linux",
@@ -333,7 +333,7 @@ by running `bun install` in the plugin directory.
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.2.3',
+  version = 'v1.3.1',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
     template = "default", -- Template to use for rendering screenshots ("default", "macos", "linux")

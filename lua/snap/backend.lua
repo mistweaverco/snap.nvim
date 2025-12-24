@@ -107,12 +107,28 @@ local function download_file_async(url, output_path, callback)
     vim.schedule_wrap(function(result)
       if result.stderr and result.stderr ~= "" then
         Logger.error("Error downloading snap.nvim backend: ", vim.inspect(result.stderr))
+        if callback then
+          callback()
+        end
         return
       end
       if result.code ~= 0 then
         Logger.error("Download failed with exit code: " .. tostring(result.code))
+        if callback then
+          callback()
+        end
         return
       end
+      -- Verify the file was actually downloaded
+      local f = io.open(output_path, "r")
+      if not f then
+        Logger.error("Downloaded file not found at: " .. output_path)
+        if callback then
+          callback()
+        end
+        return
+      end
+      f:close()
       make_executable(output_path)
       Logger.notify("Snap.nvim backend downloaded successfully!", Logger.LoggerLogLevels.info)
       if callback then
@@ -227,7 +243,19 @@ M.ensure_installed = function(callback)
   end
 
   Logger.notify(string.format("%s. Downloading %s...", reason, required_version), Logger.LoggerLogLevels.info)
-  M.install(required_version_tag, callback)
+  M.install(required_version_tag, function()
+    -- Verify the binary was successfully installed before calling the callback
+    if binary_exists() and version_matches() then
+      if callback then
+        callback()
+      end
+    else
+      Logger.error("Backend installation failed or binary is not accessible")
+      if callback then
+        callback()
+      end
+    end
+  end)
 end
 
 return M
