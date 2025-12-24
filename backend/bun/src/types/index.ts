@@ -7,6 +7,8 @@ export const enum JSONRequestType {
   CodeImageGeneration = "image",
   CodeHTMLGeneration = "html",
   CodeRTFGeneration = "rtf",
+  Health = "health",
+  Install = "install",
 }
 
 interface FontSettingsFont {

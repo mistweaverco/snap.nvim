@@ -64,7 +64,7 @@ end
 --- @param ... any Multiple arguments to log
 --- @return nil
 local logger_print = function(level, ...)
-  print("[" .. Globals.NAME .. "] [" .. level .. "] " .. get_log_message(...))
+  vim.notify(get_log_message(...), level, { title = Globals.NAME })
 end
 
 --- Log a message at info level

@@ -11,7 +11,91 @@ import type {
   NodeHTMLToImageBuffer,
 } from "./types";
 
+import { checkPuppeteerInstalled, installPuppeteer } from "./utils/puppeteer";
+import path from "node:path";
+import os from "node:os";
+
+/**
+ * Handles the health check command
+ * Returns JSON with information about whether Puppeteer is installed
+ */
+const handleHealth = async () => {
+  const cacheDir = path.join(os.homedir(), ".cache", "puppeteer");
+  const { isInstalled, executablePath } = checkPuppeteerInstalled(cacheDir);
+
+  writeJSONToStdout({
+    success: true,
+    debug: false,
+    data: {
+      isInstalled,
+      executablePath,
+    },
+  });
+};
+
+/**
+ * Handles the install command
+ * Installs Puppeteer and sends progress updates as JSON (one line per update)
+ */
+const handleInstall = async () => {
+  const cacheDir = path.join(os.homedir(), ".cache", "puppeteer");
+
+  const progressCallback = (progress: {
+    status: string;
+    message: string;
+    progress?: number;
+  }) => {
+    // Send progress update as JSON on a single line
+    // Write directly - process.stdout.write is non-blocking by default
+    const progressJson = JSON.stringify({
+      success: true,
+      debug: false,
+      data: {
+        type: JSONRequestType.Install,
+        status: progress.status,
+        message: progress.message,
+        progress: progress.progress,
+      },
+    });
+    process.stdout.write(progressJson + "\n");
+  };
+
+  const executablePath = await installPuppeteer(cacheDir, progressCallback);
+
+  if (executablePath) {
+    writeJSONToStdout({
+      success: true,
+      debug: false,
+      data: {
+        type: JSONRequestType.Install,
+        status: "completed",
+        message: "Browser installation completed successfully",
+        executablePath,
+      },
+    });
+  } else {
+    writeJSONToStdout({
+      success: false,
+      error: "Failed to install browser",
+    });
+  }
+};
+
 const main = async () => {
+  // Check for command line arguments
+  const args = process.argv.slice(2);
+  if (args.length > 0) {
+    const command = args[0];
+    if (command === "health") {
+      await handleHealth();
+      return;
+    } else if (command === "install") {
+      await handleInstall();
+      return;
+    }
+  }
+
+  // Default behavior: read from stdin
   const jsonPayload = await getJSONFromStdin();
 
   if ("error" in jsonPayload) {

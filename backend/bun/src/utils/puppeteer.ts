@@ -15,6 +15,15 @@ import {
 import { writeJSONToStdout } from "./stdin";
 
 /**
+ * Progress callback type for install operations
+ */
+export type InstallProgressCallback = (progress: {
+  status: string;
+  message: string;
+  progress?: number;
+}) => void;
+
+/**
  * Gets the executable path for the installed Chrome browser.
  * @param cacheDir - The cache directory where browsers are stored
  * @returns The executable path, or null if not found
@@ -31,7 +40,6 @@ const getInstalledBrowserPath = (cacheDir: string): string | null => {
     const browserPlatform =
       platformMap[currentPlatform] || BrowserPlatform.LINUX;
 
-    // Try to get the latest installed browser
     const cache = new Cache(cacheDir);
     const installedBrowsers = cache.getInstalledBrowsers();
     const chromeBrowser = installedBrowsers.find(
@@ -57,14 +65,9 @@ const getInstalledBrowserPath = (cacheDir: string): string | null => {
  * Sets up Puppeteer cache directory and ensures browser is installed.
  * This is necessary when running in a bundled binary where the default
  * cache path might not be accessible.
- * Uses platform-specific default cache directories:
- * - Windows: %LOCALAPPDATA%\puppeteer
- * - macOS: ~/Library/Caches/puppeteer
- * - Linux: ~/.cache/puppeteer
  * @returns The executable path of the installed browser, or null if not found
  */
 export const setupPuppeteer = async (): Promise<string | null> => {
-  // Use platform-specific default cache directory
   const cacheDir = path.join(os.homedir(), ".cache", "puppeteer");
 
   // Ensure the cache directory exists
@@ -137,4 +140,150 @@ export const setupPuppeteer = async (): Promise<string | null> => {
   }
 
   return executablePath;
+};
+
+/**
+ * Checks if Puppeteer browser is installed
+ * @param cacheDir - The cache directory where browsers are stored
+ * @returns Object with isInstalled boolean and executablePath if installed
+ */
+export const checkPuppeteerInstalled = (
+  cacheDir: string,
+): { isInstalled: boolean; executablePath: string | null } => {
+  try {
+    const executablePath = getInstalledBrowserPath(cacheDir);
+    if (executablePath && existsSync(executablePath)) {
+      return { isInstalled: true, executablePath };
+    }
+
+    try {
+      const puppeteerPath = puppeteer.executablePath();
+      if (puppeteerPath && existsSync(puppeteerPath)) {
+        return { isInstalled: true, executablePath: puppeteerPath };
+      }
+    } catch (/* eslint-disable-line */ error) {
+      // Browser is not installed
+    }
+
+    return { isInstalled: false, executablePath: null };
+  } catch (/* eslint-disable-line */ error) {
+    return { isInstalled: false, executablePath: null };
+  }
+};
+
+/**
+ * Installs Puppeteer browser with progress updates
+ * @param cacheDir - The cache directory where browsers are stored
+ * @param progressCallback - Callback function to report progress
+ * @returns The executable path of the installed browser, or null if installation failed
+ */
+export const installPuppeteer = async (
+  cacheDir: string,
+  progressCallback?: InstallProgressCallback,
+): Promise<string | null> => {
+  try {
+    await mkdir(cacheDir, { recursive: true });
+
+    const platformMap: Record<string, BrowserPlatform> = {
+      win32: BrowserPlatform.WIN32,
+      darwin: BrowserPlatform.MAC,
+      linux: BrowserPlatform.LINUX,
+    };
+
+    const currentPlatform = process.platform;
+    const browserPlatform =
+      platformMap[currentPlatform] || BrowserPlatform.LINUX;
+
+    if (progressCallback) {
+      progressCallback({
+        status: "resolving",
+        message: "Resolving requirements ...",
+      });
+    }
+
+    const buildId = await resolveBuildId(
+      Browser.CHROME,
+      browserPlatform,
+      BrowserTag.LATEST,
+    );
+
+    if (progressCallback) {
+      progressCallback({
+        status: "installing",
+        message: `Installing requirements ...`,
+        progress: 0,
+      });
+    }
+
+    const installStartTime = Date.now();
+    let periodicUpdateInterval: NodeJS.Timeout | null = null;
+    let isInstalling = true;
+
+    if (progressCallback) {
+      periodicUpdateInterval = setInterval(() => {
+        if (!isInstalling || !progressCallback) {
+          return;
+        }
+
+        const elapsedSeconds = Math.floor(
+          (Date.now() - installStartTime) / 1000,
+        );
+
+        progressCallback({
+          status: "installing",
+          message: `Still installing ... (${elapsedSeconds}s elapsed)`,
+          progress: undefined,
+        });
+      }, 5000);
+    }
+
+    try {
+      await install({
+        browser: Browser.CHROME,
+        buildId: buildId,
+        cacheDir: cacheDir,
+      });
+
+      isInstalling = false;
+      if (periodicUpdateInterval) {
+        clearInterval(periodicUpdateInterval);
+        periodicUpdateInterval = null;
+      }
+    } catch (installErr) {
+      isInstalling = false;
+      if (periodicUpdateInterval) {
+        clearInterval(periodicUpdateInterval);
+        periodicUpdateInterval = null;
+      }
+      throw installErr;
+    }
+
+    if (progressCallback) {
+      progressCallback({
+        status: "completed",
+        message: "Requirements installed successfully.",
+        progress: 100,
+      });
+    }
+
+    const executablePath = computeExecutablePath({
+      cacheDir: cacheDir,
+      browser: Browser.CHROME,
+      platform: browserPlatform,
+      buildId: buildId,
+    });
+
+    return executablePath;
+  } catch (installError) {
+    if (progressCallback) {
+      progressCallback({
+        status: "error",
+        message:
+          installError instanceof Error
+            ? installError.message
+            : String(installError),
+      });
+    }
+    return null;
+  }
 };
