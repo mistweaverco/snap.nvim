@@ -58,18 +58,15 @@
 		<p class="pt-6">And on the right side, there is "a snap" screenshot via Snap.nvim.</p>
 	</div>
 	<div class="text-center">
-		<figure class="diff aspect-4/3">
+		<figure class="diff mx-auto w-full max-w-4xl aspect-[4/3]">
 			<div class="diff-item-1" role="img">
-				<div class="bg-accent grid place-content-center object-contain">
-					<img
-						src="/screenshots/screenshot_jsdoc_todo_comment.png"
-						alt="Screenshot of Luadocs"
-					/>
+				<div class="bg-base-300 grid place-content-center object-cover">
+					<img src="/screenshots/screenshot_jsdoc_todo_comment.png" alt="Screenshot of jsdoc with todo comment" />
 				</div>
 			</div>
 			<div class="diff-item-2" role="img">
-				<div class="bg-accent grid place-content-center object-contain">
-					<img src="/screenshots/snap_jsdoc_todo_comment.png" alt="Snap of Luadocs" />
+				<div class="bg-base-300 grid place-content-center object-cover">
+					<img src="/screenshots/snap_jsdoc_todo_comment.png" alt="Snap of jsodc with todo comment" />
 				</div>
 			</div>
 			<div class="diff-resizer"></div>
