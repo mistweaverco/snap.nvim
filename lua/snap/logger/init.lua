@@ -54,8 +54,8 @@ local function should_log(level)
     return false
   end
   local conf = Config.get()
-  if LOG_LEVEL == nil and conf.debug and conf.debug.log_level ~= nil then
-    LOG_LEVEL = conf.debug.log_level
+  if LOG_LEVEL == nil and conf.log_level ~= nil then
+    LOG_LEVEL = conf.log_level
   end
   return LOG_LEVEL ~= nil and level >= M.LoggerLogLevels[LOG_LEVEL]
 end

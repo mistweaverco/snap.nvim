@@ -111,6 +111,7 @@ export interface JSONObjectRTFSuccessRequest {
     code: Array<JSONObjectCodeLine[]>;
     minWidth: number;
     dpi?: number;
+    tabstop?: number;
   };
 }
 
@@ -142,6 +143,7 @@ export interface JSONObjectImageSuccessRequest {
     code: Array<JSONObjectCodeLine[]>;
     minWidth: number;
     dpi?: number;
+    tabstop?: number;
   };
 }
 
@@ -162,6 +164,27 @@ export type JSONObjectRequest =
   | JSONObjectSuccessRequest
   | JSONObjectErrorRequest;
 
+export interface JSONObjectHealthResponse {
+  success: true;
+  debug: boolean;
+  data: {
+    isInstalled: boolean;
+    executablePath: string | null;
+  };
+}
+
+export interface JSONObjectInstallResponse {
+  success: true;
+  debug: boolean;
+  data: {
+    type: JSONRequestType.Install;
+    status: string;
+    message: string;
+    progress?: number;
+    executablePath?: string;
+  };
+}
+
 export interface JSONObjectSuccessResponse {
   success: true;
   debug: boolean;
@@ -181,4 +204,6 @@ export interface JSONObjectErrorResponse {
 
 export type JSONObjectResponse =
   | JSONObjectSuccessResponse
+  | JSONObjectHealthResponse
+  | JSONObjectInstallResponse
   | JSONObjectErrorResponse;

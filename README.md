@@ -37,8 +37,26 @@ capture the entire Neovim window.
 - Neovim 0.11.5+
 - cURL installed on your system
   (for downloading pre-built binaries)
+- Extraction tools for archive extraction:
+  - **Windows**: `unzip` (usually available via Git Bash, WSL, or MSYS2)
+  - **Linux/macOS**: `tar` (typically pre-installed)
 - linux-amd64, macos-amd64, macos-arm64 or windows-amd64 system
   (you need to build from source for other systems)
+
+### Linux Dependencies
+
+On Linux systems, the following packages are required for the bundled Chromium browser:
+
+```bash
+# Debian/Ubuntu
+sudo apt install libnss3 libatk-bridge2.0-0 libx11-xcb1
+
+# Fedora/RHEL
+sudo dnf install nss atk at-spi2-atk libxkbcommon
+
+# Arch Linux
+sudo pacman -S nss atk at-spi2-atk libxkbcommon
+```
 
 ## Install
 
@@ -310,7 +328,25 @@ Optional. Defaults to:
 }
 ```
 
-### Configure `debug`
+### Configure `log_level`
+
+Optional. Defaults to `"error"`.
+
+Log level for debugging. Controls which log messages are displayed.
+
+Valid options are:
+- `"trace"` - Most verbose, shows all log messages
+- `"debug"` - Shows debug, info, warn, and error messages
+- `"info"` - Shows info, warn, and error messages
+- `"warn"` - Shows warn and error messages
+- `"error"` - Shows only error messages (default)
+- `"off"` - Disables all logging
+
+```lua
+log_level = "error",  -- Log level for debugging
+```
+
+### Configure `development_mode`
 
 Optional. Defaults to `nil`.
 
@@ -323,8 +359,7 @@ by running `bun install` in the plugin directory.
 
 ```lua
 {
-  backend = "bun",         -- Debug backend to use (currently only "bun" is supported)
-  log_level = "info",      -- Log level for debugging (e.g., "info", "debug", "error")
+  backend = "bun",  -- Development mode backend to use (currently only "bun" is supported)
 }
 ```
 
@@ -336,6 +371,7 @@ by running `bun install` in the plugin directory.
   version = 'v1.3.1',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
+    log_level = "error", -- Log level for debugging (e.g., "trace", "debug", "info", "warn", "error", "off")
     template = "default", -- Template to use for rendering screenshots ("default", "macos", "linux")
     template_filepath = nil, -- Absolute path to a custom handlebars template file (optional), overrides 'template' option
     -- Additional data to pass to the your custom handlebars template (optional)
@@ -382,13 +418,12 @@ by running `bun install` in the plugin directory.
         -- so you can view it correctly in E-mails or browsers
       },
     },
-  },
-  -- defaults to nil
-  -- if set, no pre-compiled binaries will be downloaded
-  -- and the plugin will attempt to run directly from source
-  debug = {
-    backend = "bun",         -- Debug backend to use (currently only "bun" is supported)
-    log_level = "info",      -- Log level for debugging (e.g., "info", "debug", "error")
+    -- defaults to nil
+    -- if set, no pre-compiled binaries will be downloaded
+    -- and the plugin will attempt to run directly from source
+    development_mode = {
+      backend = "bun",  -- Development mode backend to use (currently only "bun" is supported)
+    },
   },
 },
 ```

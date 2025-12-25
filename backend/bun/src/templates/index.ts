@@ -3,6 +3,7 @@ import path from "path";
 import defaultTemplatePath from "../../../../templates/default.hbs" with { type: "file" };
 import linuxTemplatePath from "../../../../templates/linux.hbs" with { type: "file" };
 import macOSTemplatePath from "../../../../templates/macos.hbs" with { type: "file" };
+import logoPath from "../../../../assets/logo.svg" with { type: "file" };
 
 import type { JSONObjectHTMLSuccessRequest } from "./../types";
 import { JSONRequestTemplate } from "./../types";
@@ -58,6 +59,9 @@ export const Template = async (
   const ptToPxRatio = fontSizePx / fontSizePt; // This equals dpi / 72
   const adjustedMinWidth = json.data.minWidth * ptToPxRatio;
 
+  // Load logo SVG
+  const logo = await Bun.file(logoPath).text();
+
   return (
     HandlebarsGenerator(tpl, {
       code: html,
@@ -65,6 +69,8 @@ export const Template = async (
       fontFaceDeclarations,
       theme: json.data.theme,
       minWidth: adjustedMinWidth,
+      tabstop: json.data.tabstop ?? 4,
+      logo,
       data,
     }) ?? ""
   );

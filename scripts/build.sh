@@ -118,4 +118,69 @@ fi
 
 cd ../../ || { echo " ❌ Failed to change directory to project root.";echo;exit 1; }
 
+echo " 🎭 Installing Playwright Chromium..."
+echo
+bunx playwright install chromium || { echo " ❌ Failed to install Chromium.";echo;exit 1; }
+
+echo " 🧹 Removing unused locales..."
+echo
+# Find and remove unused locale files, but keep en-US.pak and required files
+# Use a loop to handle multiple chromium directories
+for chromium_dir in ~/.cache/ms-playwright/chromium-*; do
+  if [ -d "$chromium_dir" ]; then
+    find "$chromium_dir" -path "*locales*" -type f ! -name "en-US.pak" -delete || true
+  fi
+done
+
+# Ensure required files are kept
+# icudtl.dat, chrome_100_percent.pak, chrome_200_percent.pak are kept automatically
+
+echo " 📦 Bundling Playwright..."
+echo
+# Create playwright directory in dist
+mkdir -p "dist/playwright"
+
+# Copy playwright chromium to dist
+PLAYWRIGHT_FOUND=false
+for chromium_dir in ~/.cache/ms-playwright/chromium-*; do
+  if [ -d "$chromium_dir" ]; then
+    cp -R "$chromium_dir" dist/playwright/ || { echo " ❌ Failed to copy Playwright.";echo;exit 1; }
+    PLAYWRIGHT_FOUND=true
+  fi
+done
+
+if [ "$PLAYWRIGHT_FOUND" = false ]; then
+  echo " ⚠️  Warning: Playwright cache not found, skipping bundling"
+fi
+
+echo " 📦 Creating release archive..."
+echo
+
+BINARY_NAME="snap-nvim-${PLATFORM_NAME}${BIN_EXT}"
+
+# Create archive based on platform
+case "$PLATFORM" in
+  "windows-x86_64")
+    ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.zip"
+    cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
+    if [ -d "playwright" ]; then
+      zip -r "$ARCHIVE_NAME" "$BINARY_NAME" playwright/ || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
+    else
+      zip "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
+    fi
+    cd ..
+    ;;
+  *)
+    ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.tar.gz"
+    cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
+    if [ -d "playwright" ]; then
+      tar -czf "$ARCHIVE_NAME" "$BINARY_NAME" playwright/ || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
+    else
+      tar -czf "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
+    fi
+    cd ..
+    ;;
+esac
+
 echo " ✅ Build completed successfully in CI ☁️ environment."
+echo " 📦 Archive created: dist/$ARCHIVE_NAME"

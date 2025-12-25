@@ -11,17 +11,19 @@ import type {
   NodeHTMLToImageBuffer,
 } from "./types";
 
-import { checkPuppeteerInstalled, installPuppeteer } from "./utils/puppeteer";
+import {
+  checkPlaywrightInstalled,
+  installPlaywright,
+} from "./utils/playwright";
 import path from "node:path";
 import os from "node:os";
 
 /**
  * Handles the health check command
- * Returns JSON with information about whether Puppeteer is installed
+ * Returns JSON with information about whether Playwright browser is available
  */
 const handleHealth = async () => {
-  const cacheDir = path.join(os.homedir(), ".cache", "puppeteer");
-  const { isInstalled, executablePath } = checkPuppeteerInstalled(cacheDir);
+  const { isInstalled, executablePath } = checkPlaywrightInstalled();
 
   writeJSONToStdout({
     success: true,
@@ -35,10 +37,11 @@ const handleHealth = async () => {
 
 /**
  * Handles the install command
- * Installs Puppeteer and sends progress updates as JSON (one line per update)
+ * Since we bundle Chromium, this just resolves the executable path
+ * and sends progress updates as JSON (one line per update)
  */
 const handleInstall = async () => {
-  const cacheDir = path.join(os.homedir(), ".cache", "puppeteer");
+  const cacheDir = path.join(os.homedir(), ".cache", "playwright");
 
   const progressCallback = (progress: {
     status: string;
@@ -60,7 +63,7 @@ const handleInstall = async () => {
     process.stdout.write(progressJson + "\n");
   };
 
-  const executablePath = await installPuppeteer(cacheDir, progressCallback);
+  const executablePath = await installPlaywright(cacheDir, progressCallback);
 
   if (executablePath) {
     writeJSONToStdout({
@@ -69,14 +72,14 @@ const handleInstall = async () => {
       data: {
         type: JSONRequestType.Install,
         status: "completed",
-        message: "Browser installation completed successfully",
+        message: "Browser ready.",
         executablePath,
       },
     });
   } else {
     writeJSONToStdout({
       success: false,
-      error: "Failed to install browser",
+      error: "Failed to resolve browser executable",
     });
   }
 };

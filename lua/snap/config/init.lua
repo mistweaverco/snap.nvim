@@ -6,7 +6,8 @@ local M = {}
 ---@type SnapConfig
 M.defaults = {
   user_command = "Snap", -- Name of the user command to take screenshots
-  debug = nil,
+  log_level = "error", -- Log level for debugging (e.g., "trace", "debug", "info", "warn", "error", "off")
+  development_mode = nil,
   timeout = 120000, -- 2 minutes - allows time for browser installation on first run
   template = "default", -- Built-in template name or "default"
   templateFilepath = nil, -- Absolute path to a custom HTML template file (optional)

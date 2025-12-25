@@ -68,11 +68,14 @@ function M.get_backend_payload_from_buf(opts, callback)
   local hl_map = highlights_map.build_hl_map(bufnr)
 
   --- @type SnapPayload
+  local tabstop = vim.api.nvim_buf_get_option(bufnr, "tabstop")
+
   local snap_payload = {
     success = true,
-    debug = user_config.debug and true or false,
+    debug = user_config.development_mode and true or false,
     data = {
       additionalTemplateData = user_config.additional_template_data or {},
+      tabstop = tabstop,
       code = {},
       theme = {
         bgColor = default_bg,
@@ -100,17 +103,38 @@ function M.get_backend_payload_from_buf(opts, callback)
   -- Calculate the longest line length (in characters) for min width calculation
   -- based on the selection or entire buffer
   -- This is a rough estimate and may not be accurate for proportional fonts
+  -- Tabs are expanded to spaces based on the buffer's tabstop setting
+  local function expand_tabs(line)
+    local expanded = ""
+    local col = 0
+    for i = 1, #line do
+      local char = line:sub(i, i)
+      if char == "\t" then
+        -- Expand tab to spaces up to next tabstop
+        local spaces_to_add = tabstop - (col % tabstop)
+        expanded = expanded .. string.rep(" ", spaces_to_add)
+        col = col + spaces_to_add
+      else
+        expanded = expanded .. char
+        col = col + 1
+      end
+    end
+    return expanded
+  end
+
   local longest_line_len = 0
   for row, line in ipairs(lines) do
     if opts.range then
       if row >= opts.range.start_line and row <= opts.range.end_line then
-        if #line > longest_line_len then
-          longest_line_len = #line
+        local expanded_line = expand_tabs(line)
+        if #expanded_line > longest_line_len then
+          longest_line_len = #expanded_line
         end
       end
     else
-      if #line > longest_line_len then
-        longest_line_len = #line
+      local expanded_line = expand_tabs(line)
+      if #expanded_line > longest_line_len then
+        longest_line_len = #expanded_line
       end
     end
   end
