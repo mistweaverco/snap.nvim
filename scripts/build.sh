@@ -133,20 +133,19 @@ bun build --cwd ./backend/bun --compile --target="bun-$BUILD_TARGET" ./src/index
 
 # Copy playwright-core to dist for runtime loading
 # playwright-core cannot be bundled, so we copy it as-is
-# TODO: check if this is necessary for bun or if we can bundle it
 
-# echo " 📦 Copying playwright-core for runtime..."
-# echo
-# mkdir -p "dist/node_modules"
-# if [ -d "backend/bun/node_modules/playwright-core" ]; then
-#   cp -R --dereference "backend/bun/node_modules/playwright-core" "dist/node_modules/" || {
-#     echo " ⚠️  Warning: Failed to copy playwright-core to dist"
-#   }
-#   echo " ✅ Copied playwright-core to dist/node_modules/"
-# else
-#   echo " ⚠️  Warning: playwright-core not found in node_modules, make sure dependencies are installed"
-# fi
-# echo
+echo " 📦 Copying playwright-core for runtime..."
+echo
+mkdir -p "dist/node_modules"
+if [ -d "backend/bun/node_modules/playwright-core" ]; then
+  cp -R --dereference "backend/bun/node_modules/playwright-core" "dist/node_modules/" || {
+    echo " ⚠️  Warning: Failed to copy playwright-core to dist"
+  }
+  echo " ✅ Copied playwright-core to dist/node_modules/"
+else
+  echo " ⚠️  Warning: playwright-core not found in node_modules, make sure dependencies are installed"
+fi
+echo
 
 if [ "$CI" == false ]; then
   echo " ✅ Build completed successfully in non CI ☁️ environment."
