@@ -1,4 +1,5 @@
-import { chromium } from "playwright-core";
+// Use dynamic import for playwright-core to avoid bundling issues
+// This allows playwright-core to be loaded at runtime from node_modules
 import type { Page } from "playwright-core";
 
 export interface HtmlToImageOptions {
@@ -12,11 +13,52 @@ export interface HtmlToImageOptions {
 }
 
 /**
+ * Dynamically loads playwright-core at runtime
+ * due to dynamic imports and native dependencies
+ */
+async function loadPlaywright() {
+  const path = await import("node:path");
+  const fs = await import("node:fs");
+
+  // For compiled binaries, playwright-core should be in node_modules relative to the executable
+  // Try bundled location first (for production builds)
+  if (process.execPath) {
+    const execDir = path.dirname(process.execPath);
+    const bundledPath = path.join(execDir, "node_modules", "playwright-core");
+
+    if (fs.existsSync(bundledPath)) {
+      try {
+        // Use file:// URL for absolute path import
+        const playwright = await import(path.resolve(bundledPath));
+        return playwright.chromium;
+      } catch (error) {
+        // Fall through to standard import
+      }
+    }
+  }
+
+  // Try standard import (works for development and if node_modules is in module resolution path)
+  try {
+    const playwright = await import("playwright-core");
+    return playwright.chromium;
+  } catch (error) {
+    throw new Error(
+      `Failed to load playwright-core: ${
+        error instanceof Error ? error.message : String(error)
+      }. ` +
+        "Make sure playwright-core is installed or bundled with the application in node_modules/playwright-core.",
+    );
+  }
+}
+
+/**
  * Converts HTML to an image using Playwright.
  * @param options - Configuration options for the image generation
  * @returns Buffer containing the image data
  */
-export async function htmlToImage(options: HtmlToImageOptions): Promise<Buffer> {
+export async function htmlToImage(
+  options: HtmlToImageOptions,
+): Promise<Buffer> {
   const {
     html,
     output,
@@ -27,10 +69,18 @@ export async function htmlToImage(options: HtmlToImageOptions): Promise<Buffer> 
     executablePath,
   } = options;
 
+  // Dynamically load playwright-core
+  const chromium = await loadPlaywright();
+
   // Launch browser with appropriate settings
   const launchOptions: Parameters<typeof chromium.launch>[0] = {
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    ],
   };
 
   // If executable path is provided, use it explicitly
@@ -45,7 +95,11 @@ export async function htmlToImage(options: HtmlToImageOptions): Promise<Buffer> 
 
     // Set content with HTML
     await page.setContent(html, {
-      waitUntil: waitUntil as "load" | "domcontentloaded" | "networkidle" | "commit",
+      waitUntil: waitUntil as
+        | "load"
+        | "domcontentloaded"
+        | "networkidle"
+        | "commit",
     });
 
     // Measure the actual rendered content width to respect max-width constraints
@@ -60,7 +114,11 @@ export async function htmlToImage(options: HtmlToImageOptions): Promise<Buffer> 
 
       // Use body dimensions which respect max-width constraints
       const width = bodyRect.width;
-      const height = Math.max(body.scrollHeight, document.documentElement.scrollHeight, bodyRect.height);
+      const height = Math.max(
+        body.scrollHeight,
+        document.documentElement.scrollHeight,
+        bodyRect.height,
+      );
 
       return {
         width: Math.ceil(width),
@@ -98,7 +156,9 @@ export async function htmlToImage(options: HtmlToImageOptions): Promise<Buffer> 
     });
 
     // Convert to Buffer if needed
-    const buffer = screenshotBuffer instanceof Buffer ? screenshotBuffer : Buffer.from(screenshotBuffer);
+    const buffer = screenshotBuffer instanceof Buffer
+      ? screenshotBuffer
+      : Buffer.from(screenshotBuffer);
 
     return buffer;
   } finally {
