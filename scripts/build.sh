@@ -112,7 +112,11 @@ bun install --frozen-lockfile || { echo " ❌ Failed to install dependencies.";e
 cd ../.. || { echo " ❌ Failed to change to root directory.";echo;exit 1; }
 
 CURRENT_CHROMIUM_LOCALES_DIR=$(find ./dist/.local-browsers -type d -iname 'locales')
-CURRENT_CHROMIUM_DIR=$(dirname "$CURRENT_CHROMIUM_LOCALES_DIR")
+if [ -z "$CURRENT_CHROMIUM_LOCALES_DIR" ] || [ ! -d "$CURRENT_CHROMIUM_LOCALES_DIR" ]; then
+  CURRENT_CHROMIUM_DIR="$(dirname "$(find ./dist/.local-browsers -type f -iname 'chrome-headless-shell')")"
+else
+  CURRENT_CHROMIUM_DIR=$(dirname "$CURRENT_CHROMIUM_LOCALES_DIR")
+fi
 CURRENT_CHROMIUM_VERSION=$(basename "$CURRENT_CHROMIUM_DIR")
 
 if [ -z "$CURRENT_CHROMIUM_DIR" ] || [ ! -d "$CURRENT_CHROMIUM_DIR" ]; then
@@ -157,12 +161,14 @@ if [ -z "$CURRENT_CHROMIUM_DIR" ] || [ ! -d "$CURRENT_CHROMIUM_DIR" ]; then
   exit 1
 fi
 
-echo " 🧹 Removing unused locales from Playwright ..."
-echo
-
-# Find and remove unused locale files, but keep en-US.pak and required files
-find "$CURRENT_CHROMIUM_LOCALES_DIR" -type f ! -name "en-US.pak" -delete || true
-
+if [ -z $CURRENT_CHROMIUM_LOCALES_DIR ] || [ ! -d "$CURRENT_CHROMIUM_LOCALES_DIR" ]; then
+  echo " 🍏 Skipping locale cleanup as locales directory not found."
+else
+  echo " 🧹 Removing unused locales from Playwright ..."
+  echo
+  # Find and remove unused locale files, but keep en-US.pak and required files
+  find "$CURRENT_CHROMIUM_LOCALES_DIR" -type f ! -name "en-US.pak" -delete || true
+fi
 # Create playwright directory and copy contents (not the directory itself)
 mkdir -p "dist/playwright"
 cp -R "$CURRENT_CHROMIUM_DIR"/* "dist/playwright/" || { echo " ❌ Failed to copy Playwright.";echo;exit 1; }
