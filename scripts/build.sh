@@ -99,7 +99,7 @@ esac
 echo " 🧹 Cleaning dist directory..."
 echo
 cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
-rm -rf ./*
+find . -type d ! -name ".local-browsers" -type f ! -name ".gitignore" -delete || true
 cd .. || { echo " ❌ Failed to change to root directory.";echo;exit 1; }
 
 echo " 📦 Installing dependencies..."
