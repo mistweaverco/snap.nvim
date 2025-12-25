@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "prepare": "bun run --cwd web svelte-kit sync || echo ''",
-    "postinstall": "./scripts/post-install.sh",
+    "postinstall": "bun scripts/post-install.ts",
     "format": "eslint --fix . && prettier -w .",
     "web:dev": "bun run --cwd web vite dev",
     "web:build": "bun run --cwd web vite build"
