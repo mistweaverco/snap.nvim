@@ -468,8 +468,6 @@ Usage: `:Snap html`
 Save a screenshot of the current file or visual selection as an HTML file and
 copy the HTML representation to the clipboard.
 
-
-
 [badge-made-with-lua]: assets/badge-made-with-lua.svg
 [badge-made-with-love]: assets/badge-made-with-love.svg
 [contributors]: https://github.com/mistweaverco/snap.nvim/graphs/contributors

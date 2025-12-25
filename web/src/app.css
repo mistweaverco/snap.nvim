@@ -1,4 +1,4 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 @plugin 'daisyui' {
   themes: dark --default;
 }
@@ -27,7 +27,7 @@ div.code-toolbar > .toolbar > .toolbar-item > button {
   color: #e6caa8;
 }
 /* color of "Copied!" */
-.copy-to-clipboard-button[data-copy-state~='copy-success'] > span {
+.copy-to-clipboard-button[data-copy-state~="copy-success"] > span {
   color: #10b981;
 }
 

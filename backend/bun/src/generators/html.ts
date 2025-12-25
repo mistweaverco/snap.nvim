@@ -4,11 +4,7 @@ import { type JSONObjectHTMLSuccessRequest } from "./../types";
 import { Template } from "../templates";
 import { getFullOutputPath } from "../utils/file";
 
-export const HandlebarsGenerator = (
-  html: string,
-  data: unknown,
-  writeFile: false | string = false,
-): string | null => {
+export const HandlebarsGenerator = (html: string, data: unknown, writeFile: false | string = false): string | null => {
   const hb = Handlebars.compile(html);
   if (writeFile === false) {
     return hb(data);
@@ -62,19 +58,13 @@ export const HTMLGenerator = async (
         .join("");
     })
     .map((line) =>
-      line.trim() === ""
-        ? `<span class="code-line">&nbsp;</span>`
-        : `<span class="code-line">${line}</span>`,
+      line.trim() === "" ? `<span class="code-line">&nbsp;</span>` : `<span class="code-line">${line}</span>`,
     )
     .join("\n");
 
   const template = await Template(html, json);
 
-  const outputFilepath = await getFullOutputPath(
-    json.data.outputDir,
-    json.data.filename,
-    json.data.filenamePattern,
-  );
+  const outputFilepath = await getFullOutputPath(json.data.outputDir, json.data.filename, json.data.filenamePattern);
 
   const filepath = outputFilepath + ".html";
 

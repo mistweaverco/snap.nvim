@@ -5,8 +5,7 @@ export const isString = (value: unknown) => typeof value === "string";
 
 export const isFunction = (value: unknown) => typeof value === "function";
 
-export const isPlainObject = (obj: unknown) =>
-  Object.prototype.toString.call(obj) === "[object Object]";
+export const isPlainObject = (obj: unknown) => Object.prototype.toString.call(obj) === "[object Object]";
 
 export const isArray = Array.isArray;
 
@@ -89,10 +88,7 @@ export const statAsync = promisify<Stats>(stat);
 
 export const readdirAsync = promisify<string[] | Buffer[]>(readdir);
 
-export const readAllFiles = async (
-  fileOrPath: string | string[],
-  allowedExts: string[] = [],
-) => {
+export const readAllFiles = async (fileOrPath: string | string[], allowedExts: string[] = []) => {
   const files: string[] = [];
   await promiseMap(fileOrPath, async (fp) => {
     try {

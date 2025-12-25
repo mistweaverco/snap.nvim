@@ -94,7 +94,13 @@ case "$PLATFORM" in
     ;;
 esac
 
-cd "backend/$BACKEND" || { echo " ❌ Backend directory not found: backend/$BACKEND";echo;exit 1; }
+# Clean dist directory
+# Remove all files except .gitignore
+echo " 🧹 Cleaning dist directory..."
+echo
+cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
+rm -rf ./*
+cd .. || { echo " ❌ Failed to change to root directory.";echo;exit 1; }
 
 if [[ ! -d "node_modules" ]]; then
   echo " 📦 Installing dependencies..."
@@ -108,15 +114,13 @@ fi
 echo " 🔨 Building for backend: $BACKEND $BACKEND_ICON, platform: $PLATFORM $PLATFORM_ICON"
 echo
 
-bun build --compile --target="bun-$BUILD_TARGET" ./src/index.ts --outfile "../../dist/snap-nvim-${PLATFORM_NAME}${BIN_EXT}" || { echo " ❌ Build failed.";echo;exit 1; }
+bun build --cwd ./backend/bun --compile --target="bun-$BUILD_TARGET" --external electron ./src/index.ts --outfile "../../dist/snap-nvim-${PLATFORM_NAME}${BIN_EXT}" || { echo " ❌ Build failed.";echo;exit 1; }
 
 if [ "$CI" == false ]; then
   echo " ✅ Build completed successfully in non CI ☁️ environment."
   echo
   exit 0
 fi
-
-cd ../../ || { echo " ❌ Failed to change directory to project root.";echo;exit 1; }
 
 echo " 🎭 Installing Playwright Chromium..."
 echo
@@ -140,14 +144,18 @@ echo
 # Create playwright directory in dist
 mkdir -p "dist/playwright"
 
-# Copy playwright chromium to dist
+# Copy only the latest playwright chromium version to dist
 PLAYWRIGHT_FOUND=false
-for chromium_dir in ~/.cache/ms-playwright/chromium-*; do
-  if [ -d "$chromium_dir" ]; then
-    cp -R "$chromium_dir" dist/playwright/ || { echo " ❌ Failed to copy Playwright.";echo;exit 1; }
-    PLAYWRIGHT_FOUND=true
-  fi
-done
+LATEST_CHROMIUM_DIR=$(ls -1d ~/.cache/ms-playwright/chromium-* 2>/dev/null | sort -V | tail -1)
+
+if [ -n "$LATEST_CHROMIUM_DIR" ] && [ -d "$LATEST_CHROMIUM_DIR" ]; then
+  # Extract just the directory name (e.g., chromium-1200)
+  CHROMIUM_VERSION=$(basename "$LATEST_CHROMIUM_DIR")
+  cp -R "$LATEST_CHROMIUM_DIR" "dist/playwright/$CHROMIUM_VERSION" || { echo " ❌ Failed to copy Playwright.";echo;exit 1; }
+  PLAYWRIGHT_FOUND=true
+  echo " ✅ Bundled Chromium version: $CHROMIUM_VERSION"
+  echo
+fi
 
 if [ "$PLAYWRIGHT_FOUND" = false ]; then
   echo " ⚠️  Warning: Playwright cache not found, skipping bundling"
@@ -164,9 +172,9 @@ case "$PLATFORM" in
     ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.zip"
     cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
     if [ -d "playwright" ]; then
-      zip -r "$ARCHIVE_NAME" "$BINARY_NAME" playwright/ || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
+      zip -9 -r "$ARCHIVE_NAME" "$BINARY_NAME" playwright/ || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
     else
-      zip "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
+      zip -9 "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
     fi
     cd ..
     ;;
@@ -174,9 +182,9 @@ case "$PLATFORM" in
     ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.tar.gz"
     cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
     if [ -d "playwright" ]; then
-      tar -czf "$ARCHIVE_NAME" "$BINARY_NAME" playwright/ || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
+      tar --use-compress-program='gzip -9' -cf "$ARCHIVE_NAME" "$BINARY_NAME" playwright/ || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
     else
-      tar -czf "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
+      tar --use-compress-program='gzip -9' -cf "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
     fi
     cd ..
     ;;
