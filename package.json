@@ -7,7 +7,9 @@
     "backend/bun"
   ],
   "scripts": {
-    "postinstall": "bunx playwright install chromium"
+    "postinstall": "bunx playwright install chromium",
+    "prepare": "simple-git-hooks",
+    "format": "bunx -- prettier -w **/*.md *.json *.js *.yaml"
   },
   "devDependencies": {
     "@eslint/css": "0.14.1",
@@ -22,6 +24,7 @@
     "playwright": "1.48.0",
     "playwright-core": "1.48.0",
     "prettier": "3.7.4",
+    "simple-git-hooks": "2.13.1",
     "typescript-eslint": "8.49.0"
   },
   "peerDependencies": {
