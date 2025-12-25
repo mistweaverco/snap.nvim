@@ -21,11 +21,8 @@ local function check_backend_health(callback)
       if backend_bin_path == "" then
         error(conf.development_mode.backend .. " executable not found in PATH")
       end
-      cwd = payload.get_absolute_plugin_path("backend", conf.development_mode.backend)
-      if not vim.fn.isdirectory(cwd) then
-        error("Backend directory not found: " .. cwd)
-      end
-      system_args = { backend_bin_path, "run", "src/index.ts", "health" }
+      cwd = payload.get_absolute_plugin_path()
+      system_args = { backend_bin_path, "run", "backend/bun/src/index.ts", "health" }
     end
   end
 
@@ -86,12 +83,12 @@ local function install_backend(progress_callback, completion_callback)
       if backend_bin_path == "" then
         error(conf.development_mode.backend .. " executable not found in PATH")
       end
-      cwd = payload.get_absolute_plugin_path("backend", conf.development_mode.backend)
+      cwd = payload.get_absolute_plugin_path()
       if not vim.fn.isdirectory(cwd) then
         error("Backend directory not found: " .. cwd)
       end
       -- Use src/index.ts explicitly to ensure command line arguments are passed correctly
-      system_args = { backend_bin_path, "run", "src/index.ts", "install" }
+      system_args = { backend_bin_path, "run", "backend/bun/src/index.ts", "install" }
     end
   end
 
@@ -115,15 +112,17 @@ local function install_backend(progress_callback, completion_callback)
     debounce_timer = vim.fn.timer_start(150, function()
       if pending_progress and progress_callback then
         -- Only report 100% or "completed" once
-        if (pending_progress.progress == 100 or pending_progress.status == "completed") then
+        if pending_progress.progress == 100 or pending_progress.status == "completed" then
           if not progress_100_reported then
             progress_callback(pending_progress)
             progress_100_reported = true
           end
         else
           -- Only report if status or progress value changed
-          if pending_progress.status ~= last_progress_status or
-            (pending_progress.progress and pending_progress.progress ~= last_progress_value) then
+          if
+            pending_progress.status ~= last_progress_status
+            or (pending_progress.progress and pending_progress.progress ~= last_progress_value)
+          then
             progress_callback(pending_progress)
             last_progress_status = pending_progress.status
             last_progress_value = pending_progress.progress
@@ -195,7 +194,9 @@ local function install_backend(progress_callback, completion_callback)
       end
       -- Flush any pending progress immediately
       if pending_progress and progress_callback then
-        if not (pending_progress.progress == 100 or pending_progress.status == "completed") or not progress_100_reported then
+        if
+          not (pending_progress.progress == 100 or pending_progress.status == "completed") or not progress_100_reported
+        then
           progress_callback(pending_progress)
           if pending_progress.progress == 100 or pending_progress.status == "completed" then
             progress_100_reported = true
@@ -294,11 +295,11 @@ local function run_backend_export(opts, export_type, success_message)
           if backend_bin_path == "" then
             error(conf.development_mode.backend .. " executable not found in PATH")
           end
-          cwd = payload.get_absolute_plugin_path("backend", conf.development_mode.backend)
+          cwd = payload.get_absolute_plugin_path()
           if not vim.fn.isdirectory(cwd) then
             error("Backend directory not found: " .. cwd)
           end
-          system_args = { backend_bin_path, "run", "." }
+          system_args = { backend_bin_path, "run", "backend/bun/src/index.ts" }
         end
       end
 

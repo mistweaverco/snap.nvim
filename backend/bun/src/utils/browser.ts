@@ -16,69 +16,35 @@ function isExecutable(file: string): boolean {
   }
 }
 
+const EXE_NAMES =
+  process.platform === "win32"
+    ? ["chrome.exe", "chrome-headless-shell.exe"]
+    : process.platform === "darwin"
+      ? ["chrome-headless-shell", "Chromium"]
+      : ["chrome", "chrome-headless-shell"];
+
 /**
- * Finds Chromium executable in a given directory
- * @param playwrightDir - Directory containing chromium files
+ * Searches recursively for the Chromium executable in the given directory
+ * and its subdirectories.
+ * @param dir - Directory containing chromium files
  * @returns The path to the Chromium executable, or null if not found
  */
-function findChromiumInDirectory(playwrightDir: string): string | null {
-  if (!fs.existsSync(playwrightDir)) {
+function findChromiumInDirectory(dir: string): string | null {
+  if (!fs.existsSync(dir)) {
     return null;
   }
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
 
-  // For bundled builds: executable is directly in playwright directory
-  // For cache (development): executable is in chromium-* or chromium_headless_shell* subdirectories
-
-  // Executable names to search for
-  const exeNames =
-    process.platform === "win32"
-      ? ["chrome.exe", "chrome-headless-shell.exe"]
-      : process.platform === "darwin"
-        ? ["chrome-headless-shell", "Chromium"]
-        : ["chrome", "chrome-headless-shell"];
-
-  // First, check directly in playwright directory (bundled builds)
-  for (const exeName of exeNames) {
-    const directPath = path.join(playwrightDir, exeName);
-    if (fs.existsSync(directPath) && isExecutable(directPath)) {
-      return directPath;
-    }
-  }
-
-  // Fall back to cache structure: look for chromium-* or chromium_headless_shell* directories
-  try {
-    const entries = fs.readdirSync(playwrightDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (
-        entry.isDirectory() &&
-        (entry.name.startsWith("chromium-") || entry.name.startsWith("chromium_headless_shell"))
-      ) {
-        const cacheDir = path.join(playwrightDir, entry.name);
-        // Recursively search in cache directory (max depth 2)
-        function search(dir: string, depth: number = 0): string | null {
-          if (depth > 2) return null;
-          try {
-            const dirEntries = fs.readdirSync(dir, { withFileTypes: true });
-            for (const dirEntry of dirEntries) {
-              const fullPath = path.join(dir, dirEntry.name);
-              if (dirEntry.isFile() && exeNames.includes(dirEntry.name) && isExecutable(fullPath)) {
-                return fullPath;
-              } else if (dirEntry.isDirectory() && !dirEntry.name.startsWith(".")) {
-                const found = search(fullPath, depth + 1);
-                if (found) return found;
-              }
-            }
-          } catch {
-            // Ignore errors
-          }
-          return null;
-        }
-        const found = search(cacheDir);
-        if (found) return found;
+    if (entry.isFile()) {
+      if (EXE_NAMES.includes(entry.name) && isExecutable(fullPath)) {
+        return fullPath;
       }
+    } else if (entry.isDirectory()) {
+      const found = findChromiumInDirectory(fullPath);
+      if (found) return found;
     }
-  } catch {
-    // Ignore errors
   }
 
   return null;
@@ -104,8 +70,8 @@ export function resolveChromiumExecutable(): string {
     return bundledExecutable;
   }
 
-  // Fall back to Playwright cache directory (development mode)
-  const cacheDir = path.join(os.homedir(), ".cache", "ms-playwright");
+  // Development mode
+  const cacheDir = path.join(process.cwd(), "dist", ".local-browsers");
   const cacheExecutable = findChromiumInDirectory(cacheDir);
   if (cacheExecutable) {
     return cacheExecutable;

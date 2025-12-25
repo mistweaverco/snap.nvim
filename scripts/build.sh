@@ -99,18 +99,17 @@ esac
 echo " 🧹 Cleaning dist directory..."
 echo
 cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
-rm -rf ./*
+find . -type d ! -name ".local-browsers" -type f ! -name ".gitignore" -delete || true
 cd .. || { echo " ❌ Failed to change to root directory.";echo;exit 1; }
+
+  # Places binaries in dist/.local-browsers
+export PLAYWRIGHT_BROWSERS_PATH=./dist/.local-browsers
 
 echo " 📦 Installing dependencies..."
 
 cd backend/bun || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
 bun install --frozen-lockfile || { echo " ❌ Failed to install dependencies.";echo;exit 1; }
 cd ../.. || { echo " ❌ Failed to change to root directory.";echo;exit 1; }
-
-  # Places binaries in dist/.local-browsers
-export PLAYWRIGHT_BROWSERS_PATH=./dist/.local-browsers
-bunx playwright install chromium --only-shell
 
 CURRENT_CHROMIUM_LOCALES_DIR=$(find ./dist/.local-browsers -type d -iname 'locales')
 CURRENT_CHROMIUM_DIR=$(dirname "$CURRENT_CHROMIUM_LOCALES_DIR")
