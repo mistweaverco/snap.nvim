@@ -1,4 +1,6 @@
 import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const replaceProcessEnv = (input: string): string => {
   return input.replace(/\$([A-Z_]+)/g, (_, varName) => {
@@ -9,7 +11,7 @@ const replaceProcessEnv = (input: string): string => {
 export const getOutputDir = async (userConfigOutDir?: string): Promise<string> => {
   if (userConfigOutDir) {
     if (userConfigOutDir.startsWith("~")) {
-      const homeDir = process.env.HOME || process.env.USERPROFILE || null;
+      const homeDir = homedir();
       if (!homeDir) {
         throw new Error("Could not determine the user's home directory.");
       }
@@ -17,12 +19,25 @@ export const getOutputDir = async (userConfigOutDir?: string): Promise<string> =
     }
     return replaceProcessEnv(userConfigOutDir);
   }
-  const homeDir = process.env.HOME || process.env.USERPROFILE || null;
+  const homeDir = homedir();
   if (!homeDir) {
     throw new Error("Could not determine the user's home directory.");
   }
-  const picturesDir = `${homeDir}/Pictures`;
-  const screenshotsDir = `${picturesDir}/Screenshots`;
+
+  // Platform-specific default screenshot directories
+  let screenshotsDir: string;
+  switch (process.platform) {
+    case "darwin": // macOS
+      screenshotsDir = join(homeDir, "Desktop");
+      break;
+    case "win32": // Windows
+      screenshotsDir = join(homeDir, "Pictures", "Screenshots");
+      break;
+    default: // Linux and other Unix-like systems
+      screenshotsDir = join(homeDir, "Pictures", "Screenshots");
+      break;
+  }
+
   await mkdir(screenshotsDir, { recursive: true });
   return screenshotsDir;
 };

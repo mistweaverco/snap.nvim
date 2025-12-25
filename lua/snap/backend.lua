@@ -94,8 +94,17 @@ end
 ---@param url string URL to download from
 ---@param output_path string Path to save the file to
 ---@param progress_callback function|nil Optional callback for progress updates: {progress: number, message: string}
----@param callback function|nil Optional callback to run after download completes
+---@param callback function|nil Optional callback to run after download completes (receives success: boolean)
 local function download_file_async(url, output_path, progress_callback, callback)
+  -- Check if curl is available
+  if vim.fn.executable("curl") == 0 then
+    Logger.error("curl is not available. Please install curl to download the backend.")
+    if callback then
+      callback(false)
+    end
+    return
+  end
+
   -- Use curl with simple progress bar (#) that outputs to stderr
   -- Format: %{url_effective}\n%{size_download}\n%{size_total}\n%{speed_download}\n%{time_total}
   -- We'll parse this to show percentage
@@ -327,8 +336,12 @@ local function download_file_async(url, output_path, progress_callback, callback
 
       if exit_code ~= 0 then
         Logger.error("Download failed with exit code: " .. tostring(exit_code))
+        -- Clean up partial download if it exists
+        if vim.fn.filereadable(output_path) == 1 then
+          vim.fn.delete(output_path)
+        end
         if callback then
-          callback()
+          callback(false)
         end
         return
       end
@@ -338,7 +351,7 @@ local function download_file_async(url, output_path, progress_callback, callback
       if not f then
         Logger.error("Downloaded file not found at: " .. output_path)
         if callback then
-          callback()
+          callback(false)
         end
         return
       end
@@ -356,7 +369,7 @@ local function download_file_async(url, output_path, progress_callback, callback
       end
       Logger.notify("Snap.nvim backend downloaded successfully!", Logger.LoggerLogLevels.info)
       if callback then
-        callback()
+        callback(true)
       end
     end),
     stdout_buffered = false,
@@ -366,7 +379,7 @@ local function download_file_async(url, output_path, progress_callback, callback
   if job_id <= 0 then
     Logger.error("Failed to start download process")
     if callback then
-      callback()
+      callback(false)
     end
   end
 end
@@ -412,6 +425,15 @@ end
 ---@param progress_callback function|nil Optional callback for progress updates
 ---@param callback function|nil Optional callback to run after extraction completes
 local function extract_zip_async(archive_path, extract_dir, progress_callback, callback)
+  -- Check if unzip is available
+  if vim.fn.executable("unzip") == 0 then
+    Logger.error("unzip is not available. Please install unzip to extract the backend archive.")
+    if callback then
+      callback(false)
+    end
+    return
+  end
+
   -- Use unzip with verbose output to show progress
   -- -v: verbose, -o: overwrite, -d: extract to directory
   local cmd = { "unzip", "-o", "-v", archive_path, "-d", extract_dir }
@@ -584,6 +606,15 @@ end
 ---@param progress_callback function|nil Optional callback for progress updates
 ---@param callback function|nil Optional callback to run after extraction completes
 local function extract_tar_gz_async(archive_path, extract_dir, progress_callback, callback)
+  -- Check if tar is available
+  if vim.fn.executable("tar") == 0 then
+    Logger.error("tar is not available. Please install tar to extract the backend archive.")
+    if callback then
+      callback(false)
+    end
+    return
+  end
+
   -- Try to use pv (pipe viewer) if available for better progress
   -- Otherwise fallback to tar with verbose output
   local use_pv = vim.fn.executable("pv") == 1
@@ -837,6 +868,9 @@ end
 ---@param bin_dir string Directory where binary should be installed
 ---@return boolean success Whether setup was successful
 local function move_extracted_files(temp_dir, bin_dir)
+  -- Ensure bin_dir exists
+  vim.fn.mkdir(bin_dir, "p")
+
   -- Find the binary and playwright directory in extracted files
   -- Archive structure: snap-nvim-{platform}{ext} and playwright/ at root level
   local plat = platform()
@@ -861,17 +895,40 @@ local function move_extracted_files(temp_dir, bin_dir)
       return false
     end
     local bin_lookup = lookup_bin_paths[i]
-    if vim.fn.filereadable(bin_lookup) == 1 then
-      vim.fn.rename(temp_lookup, bin_lookup)
+
+    -- If source is a file, move it to the destination
+    if vim.fn.filereadable(temp_lookup) == 1 then
+      -- Remove old file if it exists
+      if vim.fn.filereadable(bin_lookup) == 1 then
+        vim.fn.delete(bin_lookup)
+      end
+      -- Move file to final location
+      local rename_result = vim.fn.rename(temp_lookup, bin_lookup)
+      if rename_result ~= 0 then
+        Logger.error("Failed to move file from " .. temp_lookup .. " to " .. bin_lookup)
+        return false
+      end
       make_executable(bin_lookup)
+
+      -- Verify the file was moved successfully
+      if vim.fn.filereadable(bin_lookup) == 0 then
+        Logger.error("File move verification failed: " .. bin_lookup .. " does not exist after move")
+        return false
+      end
     end
+
+    -- If source is a directory, move it to the destination
     if vim.fn.isdirectory(temp_lookup) == 1 then
       -- Remove old directory if it exists
       if vim.fn.isdirectory(bin_lookup) == 1 then
         vim.fn.delete(bin_lookup, "rf")
       end
       -- Move directory to final location
-      vim.fn.rename(temp_lookup, bin_lookup)
+      local rename_result = vim.fn.rename(temp_lookup, bin_lookup)
+      if rename_result ~= 0 then
+        Logger.error("Failed to move directory from " .. temp_lookup .. " to " .. bin_lookup)
+        return false
+      end
     end
   end
 
@@ -961,7 +1018,16 @@ M.install = function(version, callback)
     else
       Logger.notify(progress.message, Logger.LoggerLogLevels.info)
     end
-  end, function()
+  end, function(download_success)
+    -- Only proceed with extraction if download succeeded
+    if not download_success then
+      Logger.error("Download failed. Cannot proceed with installation.")
+      if callback then
+        callback()
+      end
+      return
+    end
+
     -- Extract archive after download with progress
     extract_and_setup_async(archive_path, bin_dir, function(progress)
       -- Show progress updates for extraction
