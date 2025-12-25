@@ -166,15 +166,82 @@ echo
 
 BINARY_NAME="snap-nvim-${PLATFORM_NAME}${BIN_EXT}"
 
+# Function to create zip archive (cross-platform)
+create_zip() {
+  local archive_name="$1"
+  shift
+  local files=("$@")
+
+  # Check if zip command is available
+  if command -v zip >/dev/null 2>&1; then
+    # Use zip command if available
+    if [ ${#files[@]} -gt 1 ]; then
+      zip -9 -r "$archive_name" "${files[@]}" || return 1
+    else
+      zip -9 "$archive_name" "${files[@]}" || return 1
+    fi
+  else
+    # Fallback to PowerShell on Windows (Git Bash doesn't have zip by default)
+    # Check if we're on Windows
+    if [[ -n "$WINDIR" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "msys2" ]] || [[ "$OSTYPE" == "win32" ]] || [[ "$RUNNER_OS" == "Windows" ]]; then
+      # Use PowerShell Compress-Archive
+      # Convert Unix paths to Windows paths if needed (Git Bash uses Unix-style paths)
+      # Get current directory in Windows format for PowerShell
+      local pwd_win
+      if command -v cygpath >/dev/null 2>&1; then
+        pwd_win=$(cygpath -w "$(pwd)")
+      else
+        pwd_win=$(pwd)
+      fi
+
+      # Build PowerShell command with proper file list
+      local ps_cmd="Set-Location -LiteralPath '$pwd_win'; Compress-Archive -Path @("
+      local first=true
+      for file in "${files[@]}"; do
+        if [ "$first" = true ]; then
+          first=false
+        else
+          ps_cmd+=","
+        fi
+        # Remove trailing slash for directories (PowerShell handles them correctly without it)
+        local clean_file="${file%/}"
+        # Convert to Windows path if needed
+        local win_file
+        if command -v cygpath >/dev/null 2>&1; then
+          win_file=$(cygpath -w "$clean_file")
+        else
+          win_file="$clean_file"
+        fi
+        # Escape single quotes and wrap in quotes
+        local escaped_file=$(echo "$win_file" | sed "s/'/''/g")
+        ps_cmd+="'$escaped_file'"
+      done
+      # Convert archive name to Windows path
+      local win_archive
+      if command -v cygpath >/dev/null 2>&1; then
+        win_archive=$(cygpath -w "$archive_name")
+      else
+        win_archive="$archive_name"
+      fi
+      local escaped_archive=$(echo "$win_archive" | sed "s/'/''/g")
+      ps_cmd+=") -DestinationPath '$escaped_archive' -Force"
+      powershell.exe -NoProfile -Command "$ps_cmd" || return 1
+    else
+      echo " ❌ zip command not found and not on Windows. Cannot create zip archive."
+      return 1
+    fi
+  fi
+}
+
 # Create archive based on platform
 case "$PLATFORM" in
   "windows-x86_64")
     ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.zip"
     cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
     if [ -d "playwright" ]; then
-      zip -9 -r "$ARCHIVE_NAME" "$BINARY_NAME" playwright/ || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
+      create_zip "$ARCHIVE_NAME" "$BINARY_NAME" "playwright/" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
     else
-      zip -9 "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
+      create_zip "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
     fi
     cd ..
     ;;
