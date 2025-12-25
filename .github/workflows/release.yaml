@@ -114,12 +114,12 @@ jobs:
 
       - name: Build (Unix)
         if: runner.os != 'Windows'
-        run: ./scripts/build.sh bun ${{ matrix.platform }}
+        run: ./scripts/build.sh "bun" ${{ matrix.platform }}
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: bash
-        run: ./scripts/build.sh bun ${{ matrix.platform }}
+        run: ./scripts/build.sh "bun" ${{ matrix.platform }}
 
       - name: Upload artifact
         if: runner.os == 'Windows'
