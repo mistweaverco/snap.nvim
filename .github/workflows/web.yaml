@@ -51,7 +51,7 @@ jobs:
           restore-keys: |
             linux-bun-web-${{ hashFiles('**/bun.lock') }}
       - name: Install web dependencies
-        run: bun run install --frozen-lockfile
+        run: bun install --frozen-lockfile
       - name: Create Website
         run: bun run web:build
       - name: Setup Pages
