@@ -113,6 +113,34 @@ local function download_file_async(url, output_path, progress_callback, callback
   local last_progress = 0
   local download_completed = false
   local final_stats = nil
+  local progress_100_reported = false
+  local debounce_timer = nil
+  local pending_progress = nil
+
+  -- Debounced progress callback to prevent rapid updates
+  local function report_progress(progress_data)
+    pending_progress = progress_data
+    -- Clear existing timer
+    if debounce_timer then
+      vim.fn.timer_stop(debounce_timer)
+    end
+    -- Set new timer to report after 100ms
+    debounce_timer = vim.fn.timer_start(100, function()
+      if pending_progress and progress_callback then
+        -- Only report 100% once
+        if pending_progress.progress == 100 then
+          if not progress_100_reported then
+            progress_callback(pending_progress)
+            progress_100_reported = true
+            download_completed = true
+          end
+        else
+          progress_callback(pending_progress)
+        end
+        pending_progress = nil
+      end
+    end)
+  end
 
   local job_id = vim.fn.jobstart(cmd, {
     env = vim.fn.environ(),
@@ -138,16 +166,15 @@ local function download_file_async(url, output_path, progress_callback, callback
           }
 
           -- Only report if we haven't completed yet and have valid data
-          if size_total > 0 and progress_callback and not download_completed then
+          if size_total > 0 and not download_completed then
             local progress = math.floor((size_download / size_total) * 100)
+            -- Cap at 99% to avoid showing 100% multiple times (let on_exit handle final 100%)
+            progress = math.min(99, progress)
             if progress ~= last_progress then
               local speed_mb = speed / 1024 / 1024
               local message = string.format("Downloading backend... %d%% (%.2f MB/s)", progress, speed_mb)
-              progress_callback({ progress = progress, message = message })
+              report_progress({ progress = progress, message = message })
               last_progress = progress
-              if progress >= 100 then
-                download_completed = true
-              end
             end
           end
         end
@@ -156,7 +183,7 @@ local function download_file_async(url, output_path, progress_callback, callback
     on_stderr = vim.schedule_wrap(function(_, data, _)
       -- Parse curl's -# progress bar from stderr for real-time updates
       -- Format: "##..." where each # represents ~2% progress (50 # = 100%)
-      if data and #data > 0 and progress_callback and not download_completed then
+      if data and #data > 0 and not download_completed then
         for _, line in ipairs(data) do
           if line ~= "" then
             -- Count # characters in the line
@@ -166,10 +193,10 @@ local function download_file_async(url, output_path, progress_callback, callback
             end
             -- Simple progress bar has ~50 # characters for 100%
             if hash_count > 0 then
-              local estimated_progress = math.min(100, math.floor((hash_count / 50) * 100))
+              local estimated_progress = math.min(99, math.floor((hash_count / 50) * 100))
               -- Only update if progress changed and we haven't completed
               if estimated_progress ~= last_progress and estimated_progress < 100 then
-                progress_callback({
+                report_progress({
                   progress = estimated_progress,
                   message = string.format("Downloading backend... %d%%", estimated_progress),
                 })
@@ -181,6 +208,17 @@ local function download_file_async(url, output_path, progress_callback, callback
       end
     end),
     on_exit = vim.schedule_wrap(function(_, exit_code, _)
+      -- Stop any pending debounce timer
+      if debounce_timer then
+        vim.fn.timer_stop(debounce_timer)
+        debounce_timer = nil
+      end
+      -- Flush any pending progress immediately
+      if pending_progress and progress_callback and pending_progress.progress ~= 100 then
+        progress_callback(pending_progress)
+        pending_progress = nil
+      end
+
       if exit_code ~= 0 then
         Logger.error("Download failed with exit code: " .. tostring(exit_code))
         if callback then
@@ -201,13 +239,15 @@ local function download_file_async(url, output_path, progress_callback, callback
       f:close()
       make_executable(output_path)
       -- Report completion only if we haven't already reported 100%
-      if progress_callback and not download_completed then
+      if progress_callback and not progress_100_reported then
         if final_stats and final_stats.size_total > 0 then
           local speed_mb = (final_stats.speed or 0) / 1024 / 1024
           progress_callback({ progress = 100, message = string.format("Download completed! (%.2f MB/s)", speed_mb) })
         else
           progress_callback({ progress = 100, message = "Download completed!" })
         end
+        progress_100_reported = true
+        download_completed = true
       end
       Logger.notify("Snap.nvim backend downloaded successfully!", Logger.LoggerLogLevels.info)
       if callback then
@@ -482,44 +522,40 @@ local function move_extracted_files(temp_dir, bin_dir)
   local ext = IS_WINDOWS and ".exe" or ""
   local release_bin_name = "snap-nvim-" .. plat .. ext
   local bin_path = M.get_bin_path()
-  local playwright_dir = join_paths(bin_dir, "playwright")
 
-  local found_binary = false
-  local found_playwright = false
+  local lookup_temp_paths = {
+    join_paths(temp_dir, release_bin_name),
+    join_paths(temp_dir, "node_modules"),
+    join_paths(temp_dir, "playwright"),
+  }
+  local lookup_bin_paths = {
+    bin_path,
+    join_paths(bin_dir, "node_modules"),
+    join_paths(bin_dir, "playwright"),
+  }
 
-  -- Look for binary at root of temp directory (archive extracts to root)
-  local temp_binary = join_paths(temp_dir, release_bin_name)
-  if vim.fn.filereadable(temp_binary) == 1 then
-    -- Move binary to final location
-    vim.fn.rename(temp_binary, bin_path)
-    make_executable(bin_path)
-    found_binary = true
-  end
-
-  -- Look for playwright directory at root of temp directory
-  local temp_playwright = join_paths(temp_dir, "playwright")
-  if vim.fn.isdirectory(temp_playwright) == 1 then
-    -- Remove old playwright directory if it exists
-    if vim.fn.isdirectory(playwright_dir) == 1 then
-      vim.fn.delete(playwright_dir, "rf")
+  for i, temp_lookup in ipairs(lookup_temp_paths) do
+    if vim.fn.filereadable(temp_lookup) == 0 and vim.fn.isdirectory(temp_lookup) == 0 then
+      Logger.error("Expected file or directory not found in extracted archive: " .. temp_lookup)
+      return false
     end
-    -- Move playwright directory to final location
-    vim.fn.rename(temp_playwright, playwright_dir)
-    found_playwright = true
+    local bin_lookup = lookup_bin_paths[i]
+    if vim.fn.filereadable(bin_lookup) == 1 then
+      vim.fn.rename(temp_lookup, bin_lookup)
+      make_executable(bin_lookup)
+    end
+    if vim.fn.isdirectory(temp_lookup) == 1 then
+      -- Remove old directory if it exists
+      if vim.fn.isdirectory(bin_lookup) == 1 then
+        vim.fn.delete(bin_lookup, "rf")
+      end
+      -- Move directory to final location
+      vim.fn.rename(temp_lookup, bin_lookup)
+    end
   end
 
   -- Clean up temp directory
   vim.fn.delete(temp_dir, "rf")
-
-  if not found_binary then
-    Logger.error("Binary not found in extracted archive")
-    return false
-  end
-
-  -- Playwright directory is optional (for backwards compatibility)
-  if found_playwright then
-    Logger.notify("Playwright bundled with backend", Logger.LoggerLogLevels.info)
-  end
 
   return true
 end
