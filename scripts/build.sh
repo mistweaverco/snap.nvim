@@ -277,7 +277,6 @@ echo
 # Remove copied playwright and node_modules to keep dist clean
 rm -rf "$PLAYWRIGHT_BROWSERS_PATH" \
   "./dist/playwright" \
-  "./dist/.local-browsers" \
   "./dist/$BINARY_NAME"
 echo " ✅ Cleanup completed."
 echo
