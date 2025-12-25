@@ -16,9 +16,7 @@ export interface HtmlToImageOptions {
  * @param options - Configuration options for the image generation
  * @returns Buffer containing the image data
  */
-export async function htmlToImage(
-  options: HtmlToImageOptions,
-): Promise<Buffer> {
+export async function htmlToImage(options: HtmlToImageOptions): Promise<Buffer> {
   const {
     html,
     output,
@@ -32,12 +30,7 @@ export async function htmlToImage(
   // Launch browser with appropriate settings
   const launchOptions: Parameters<typeof chromium.launch>[0] = {
     headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
   };
 
   // If executable path is provided, use it explicitly
@@ -52,11 +45,7 @@ export async function htmlToImage(
 
     // Set content with HTML
     await page.setContent(html, {
-      waitUntil: waitUntil as
-        | "load"
-        | "domcontentloaded"
-        | "networkidle"
-        | "commit",
+      waitUntil: waitUntil as "load" | "domcontentloaded" | "networkidle" | "commit",
     });
 
     // Measure the actual rendered content width to respect max-width constraints
@@ -71,11 +60,7 @@ export async function htmlToImage(
 
       // Use body dimensions which respect max-width constraints
       const width = bodyRect.width;
-      const height = Math.max(
-        body.scrollHeight,
-        document.documentElement.scrollHeight,
-        bodyRect.height,
-      );
+      const height = Math.max(body.scrollHeight, document.documentElement.scrollHeight, bodyRect.height);
 
       return {
         width: Math.ceil(width),
@@ -113,10 +98,7 @@ export async function htmlToImage(
     });
 
     // Convert to Buffer if needed
-    const buffer =
-      screenshotBuffer instanceof Buffer
-        ? screenshotBuffer
-        : Buffer.from(screenshotBuffer);
+    const buffer = screenshotBuffer instanceof Buffer ? screenshotBuffer : Buffer.from(screenshotBuffer);
 
     return buffer;
   } finally {

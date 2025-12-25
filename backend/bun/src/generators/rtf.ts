@@ -1,8 +1,5 @@
 import fs from "fs";
-import type {
-  JSONObjectCodeLine,
-  JSONObjectRTFSuccessRequest,
-} from "./../types";
+import type { JSONObjectCodeLine, JSONObjectRTFSuccessRequest } from "./../types";
 import { getFullOutputPath } from "../utils/file";
 
 let colorTable: string[] = [];
@@ -54,10 +51,7 @@ const processLine = (line: JSONObjectCodeLine[]): string => {
       if (seg.italic) rtfSeg += "\\i";
       if (seg.underline) rtfSeg += "\\ul";
 
-      const escapedText = seg.text
-        .replace(/\\/g, "\\\\")
-        .replace(/{/g, "\\{")
-        .replace(/}/g, "\\}");
+      const escapedText = seg.text.replace(/\\/g, "\\\\").replace(/{/g, "\\{").replace(/}/g, "\\}");
 
       rtfSeg += ` ${escapedText}`;
 
@@ -101,9 +95,7 @@ function pxToTwips(px: number): number {
   return px * TWIPS_PER_PIXEL;
 }
 
-export const RTFGenerator = async (
-  json: JSONObjectRTFSuccessRequest,
-): Promise<[string, string]> => {
+export const RTFGenerator = async (json: JSONObjectRTFSuccessRequest): Promise<[string, string]> => {
   colorTable = buildColorTable(json);
 
   // Global document settings: font size (\fs), line height (\sl),
@@ -113,9 +105,7 @@ export const RTFGenerator = async (
   const margin = 0;
   // \paperw: Paper width in twips
   // \margl / \margr: Left and Right margins
-  const headerSettings = `\\paperw${pxToTwips(
-    json.data.minWidth,
-  )}\\margl${margin}\\margr${margin}\\viewkind4`;
+  const headerSettings = `\\paperw${pxToTwips(json.data.minWidth)}\\margl${margin}\\margr${margin}\\viewkind4`;
   const docDefaults = `\\f0\\fs${pxToPt(json.data.fontSettings.size) * 2}\\sl${pxToTwips(
     json.data.fontSettings.line_height,
   )}\\slmult1\\cf${fgIdx}\\highlight${bgIdx}\\cbpat${bgIdx}`;
@@ -126,11 +116,7 @@ export const RTFGenerator = async (
     json,
   )}\n${generateColorTable()}\n${docDefaults}\n${body}\\par\n}`;
 
-  const outputFilepath = await getFullOutputPath(
-    json.data.outputDir,
-    json.data.filename,
-    json.data.filenamePattern,
-  );
+  const outputFilepath = await getFullOutputPath(json.data.outputDir, json.data.filename, json.data.filenamePattern);
 
   const filepath = outputFilepath + ".rtf";
 

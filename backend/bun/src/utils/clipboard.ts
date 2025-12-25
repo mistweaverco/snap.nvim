@@ -4,13 +4,7 @@ import { unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-type MimeType =
-  | "text/plain"
-  | "text/html"
-  | "text/rtf"
-  | "image/png"
-  | "image/jpeg"
-  | "application/json";
+type MimeType = "text/plain" | "text/html" | "text/rtf" | "image/png" | "image/jpeg" | "application/json";
 
 const getLinuxTool = (): string | null => {
   const isWayland = !!process.env.WAYLAND_DISPLAY;
@@ -46,12 +40,7 @@ export const Clipboard = {
           "$img = Get-Clipboard -Image; if($img) { $ms = New-Object System.IO.MemoryStream; $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); $ms.ToArray() }",
         ];
       } else {
-        cmd = [
-          "powershell.exe",
-          "-NoProfile",
-          "-Command",
-          "Get-Clipboard -Raw",
-        ];
+        cmd = ["powershell.exe", "-NoProfile", "-Command", "Get-Clipboard -Raw"];
       }
     } else if (platform === "linux") {
       const tool = getLinuxTool();
@@ -72,19 +61,14 @@ export const Clipboard = {
     return mimeType.startsWith("image/") ? result : result.toString("utf-8");
   },
 
-  async write(
-    data: string | Buffer | (string | Buffer)[],
-    mimeType: MimeType = "text/plain",
-  ): Promise<void> {
+  async write(data: string | Buffer | (string | Buffer)[], mimeType: MimeType = "text/plain"): Promise<void> {
     const platform = process.platform;
     const input =
       typeof data === "string"
         ? Buffer.from(data, "utf-8")
         : Buffer.concat(
             Array.isArray(data)
-              ? data.map((item) =>
-                  typeof item === "string" ? Buffer.from(item, "utf-8") : item,
-                )
+              ? data.map((item) => (typeof item === "string" ? Buffer.from(item, "utf-8") : item))
               : [data],
           );
 
@@ -124,20 +108,12 @@ export const Clipboard = {
           $img = [System.Drawing.Image]::FromStream($ms);
           [System.Windows.Forms.Clipboard]::SetImage($img);
         `;
-        const proc = spawn([
-          "powershell.exe",
-          "-NoProfile",
-          "-Command",
-          psCommand,
-        ]);
+        const proc = spawn(["powershell.exe", "-NoProfile", "-Command", psCommand]);
         await proc.exited;
         return;
       }
 
-      const proc = spawn(
-        ["powershell.exe", "-NoProfile", "-Command", "$input | Set-Clipboard"],
-        { stdin: input },
-      );
+      const proc = spawn(["powershell.exe", "-NoProfile", "-Command", "$input | Set-Clipboard"], { stdin: input });
       await proc.exited;
       return;
     }

@@ -26,9 +26,7 @@ function findChromiumInDirectory(playwrightDir: string): string | null {
     return null;
   }
 
-  const chromiumDirs = fs
-    .readdirSync(playwrightDir)
-    .filter((d) => d.startsWith("chromium-"));
+  const chromiumDirs = fs.readdirSync(playwrightDir).filter((d) => d.startsWith("chromium-"));
 
   if (chromiumDirs.length === 0) {
     return null;
@@ -41,17 +39,9 @@ function findChromiumInDirectory(playwrightDir: string): string | null {
       process.platform === "win32"
         ? [path.join(full, "chrome.exe")]
         : process.platform === "darwin"
-          ? [
-              path.join(
-                full,
-                "chrome-mac",
-                "Chromium.app",
-                "Contents",
-                "MacOS",
-                "Chromium",
-              ),
-            ]
+          ? [path.join(full, "chrome-mac", "Chromium.app", "Contents", "MacOS", "Chromium")]
           : [
+              path.join(full, "chrome-linux64", "chrome"),
               path.join(full, "chrome-linux", "chrome"),
               path.join(full, "chrome"),
             ];

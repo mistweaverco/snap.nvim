@@ -1,7 +1,4 @@
-export type NodeHTMLToImageBuffer =
-  | string
-  | (string | Buffer<ArrayBufferLike>)[]
-  | Buffer<ArrayBufferLike>;
+export type NodeHTMLToImageBuffer = string | (string | Buffer<ArrayBufferLike>)[] | Buffer<ArrayBufferLike>;
 
 export const enum JSONRequestType {
   CodeImageGeneration = "image",
@@ -160,9 +157,7 @@ export interface JSONObjectErrorRequest {
   error: string;
 }
 
-export type JSONObjectRequest =
-  | JSONObjectSuccessRequest
-  | JSONObjectErrorRequest;
+export type JSONObjectRequest = JSONObjectSuccessRequest | JSONObjectErrorRequest;
 
 export interface JSONObjectHealthResponse {
   success: true;

@@ -20,9 +20,7 @@ export const writeJSONToStdout = (obj: JSONObjectResponse): void => {
     }
   } catch (err) {
     const error = err as Error;
-    process.stdout.write(
-      JSON.stringify({ success: false, error: error.message, context: obj }),
-    );
+    process.stdout.write(JSON.stringify({ success: false, error: error.message, context: obj }));
     process.exit(1);
   }
 };

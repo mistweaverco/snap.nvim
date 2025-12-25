@@ -1,23 +1,23 @@
 <script lang="ts">
-	import HeadComponent from '$lib/HeadComponent.svelte';
+	import HeadComponent from "$lib/HeadComponent.svelte";
 
 	const handleAnchorClick = (evt: Event) => {
 		evt.preventDefault();
 		const link = evt.currentTarget as HTMLAnchorElement;
-		const anchorId = new URL(link.href).hash.replace('#', '');
+		const anchorId = new URL(link.href).hash.replace("#", "");
 		const anchor = document.getElementById(anchorId);
 		window.scrollTo({
 			top: anchor?.offsetTop,
-			behavior: 'smooth'
+			behavior: "smooth",
 		});
 	};
 </script>
 
 <HeadComponent
 	data={{
-		title: 'Snap.nvim',
+		title: "Snap.nvim",
 		description:
-			'A minimal screenshot plugin for Neovim. It respects your current color scheme to ensure that the screenshots blend seamlessly with your Neovim setup'
+			"A minimal screenshot plugin for Neovim. It respects your current color scheme to ensure that the screenshots blend seamlessly with your Neovim setup",
 	}}
 />
 

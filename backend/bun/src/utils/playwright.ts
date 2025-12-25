@@ -5,11 +5,7 @@ import { writeJSONToStdout } from "./stdin";
 /**
  * Progress callback type for install operations
  */
-export type InstallProgressCallback = (progress: {
-  status: string;
-  message: string;
-  progress?: number;
-}) => void;
+export type InstallProgressCallback = (progress: { status: string; message: string; progress?: number }) => void;
 
 /**
  * Checks if Playwright browser is available (bundled or in cache)

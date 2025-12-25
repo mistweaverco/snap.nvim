@@ -11,10 +11,7 @@ import { HandlebarsGenerator } from "./../generators";
 import { FontGenerator } from "../generators/font";
 import { ptToPx } from "../utils/display";
 
-export const Template = async (
-  html: string,
-  json: JSONObjectHTMLSuccessRequest,
-): Promise<string> => {
+export const Template = async (html: string, json: JSONObjectHTMLSuccessRequest): Promise<string> => {
   let tpl: string;
   if (json.data.templateFilepath) {
     // User provided a custom template path
@@ -48,8 +45,7 @@ export const Template = async (
 
   // Line-height: pass through as-is, templates will add 'pt' suffix
 
-  const fontFaceDeclarations =
-    await FontGenerator.getFontFaceDeclarationsFromJSONPayload(json);
+  const fontFaceDeclarations = await FontGenerator.getFontFaceDeclarationsFromJSONPayload(json);
 
   // minWidth calculation: minWidth is calculated in Lua assuming font_size is in pixels,
   // but font_size is in points. We need to scale minWidth by pt-to-px ratio.

@@ -3,11 +3,7 @@ import path from "path";
 import { fileTypeFromBuffer, type FileTypeResult } from "file-type";
 
 import { promiseMap, readAllFiles, readFileAsync } from "./helpers";
-import {
-  FontSettingsFonts,
-  type JSONObjectHTMLSuccessRequest,
-  type JSONObjectImageSuccessRequest,
-} from "../../types";
+import { FontSettingsFonts, type JSONObjectHTMLSuccessRequest, type JSONObjectImageSuccessRequest } from "../../types";
 
 const fontMap: { [key: string]: { mediaType: string; format: string } } = {
   ".svg": {
@@ -62,11 +58,9 @@ const readBuffer = async (buff: Buffer) => {
  * eot   = svn:mime-type=application/vnd.ms-fontobject
  * sfnt  = svn:mime-type=application/font-sfnt
  */
-const _toDataUrl = (mediaType: string, base64: string) =>
-  `data:${mediaType};charset=utf-8;base64,${base64}`;
+const _toDataUrl = (mediaType: string, base64: string) => `data:${mediaType};charset=utf-8;base64,${base64}`;
 
-const _toDataSrc = (dataUrl: string, format: string) =>
-  `url(${dataUrl}) format('${format}')`;
+const _toDataSrc = (dataUrl: string, format: string) => `url(${dataUrl}) format('${format}')`;
 
 const _getMeta = (fpath: string, ext: string) => {
   const naive = path.parse(fpath).ext;
@@ -85,10 +79,7 @@ const toDataUrl = (fpath: string, { ext, base64 }: FileTypeMeta): string => {
   return _toDataUrl(mediaType, base64);
 };
 
-const toDataSrc = (
-  fpath: string,
-  { ext, base64 }: FileTypeMeta,
-): string | null => {
+const toDataSrc = (fpath: string, { ext, base64 }: FileTypeMeta): string | null => {
   const meta = _getMeta(fpath, ext);
   if (!meta) return null;
 
@@ -102,13 +93,9 @@ const toDataSrc = (
 export async function encodeToDataUrl(fpath: string): Promise<string>;
 export async function encodeToDataUrl(fpath: string[]): Promise<string[]>;
 export async function encodeToDataUrl(fpath: null): Promise<null>;
-export async function encodeToDataUrl(
-  fpath: string | string[] | null,
-): Promise<string | string[] | null>;
+export async function encodeToDataUrl(fpath: string | string[] | null): Promise<string | string[] | null>;
 
-export async function encodeToDataUrl(
-  fpath: string | string[] | null,
-): Promise<string | string[] | null> {
+export async function encodeToDataUrl(fpath: string | string[] | null): Promise<string | string[] | null> {
   if (!fpath) return null;
   if (Array.isArray(fpath)) {
     const results = await Promise.all(fpath.map((p) => encodeToDataUrl(p)));
@@ -122,9 +109,7 @@ export async function encodeToDataUrl(
 export async function encodeToDataSrc(fpath: string): Promise<string>;
 export async function encodeToDataSrc(fpath: string[]): Promise<string[]>;
 
-export async function encodeToDataSrc(
-  fpath: string | string[],
-): Promise<string | string[]> {
+export async function encodeToDataSrc(fpath: string | string[]): Promise<string | string[]> {
   if (Array.isArray(fpath)) {
     return Promise.all(fpath.map((path) => encodeToDataSrc(path)));
   }
@@ -157,10 +142,7 @@ const allowedFontExtensions = Object.keys(fontMap);
  * @param chunkSize - Size of each chunk (default: 76, common base64 line length)
  * @returns The string with line continuations inserted
  */
-const splitWithLineContinuation = (
-  str: string,
-  chunkSize: number = 76,
-): string => {
+const splitWithLineContinuation = (str: string, chunkSize: number = 76): string => {
   const chunks: string[] = [];
   for (let i = 0; i < str.length; i += chunkSize) {
     chunks.push(str.slice(i, i + chunkSize));
@@ -177,32 +159,27 @@ const splitWithLineContinuation = (
  * @param fontPaths - Array of absolute paths to font files
  * @returns Array of objects with font-face declarations
  */
-const getCSSFontFaces = async (
-  opts: FontGeneratorFontFaceOptions,
-): Promise<FontGeneratorFontFaceDeclaration[]> => {
+const getCSSFontFaces = async (opts: FontGeneratorFontFaceOptions): Promise<FontGeneratorFontFaceDeclaration[]> => {
   const paths = opts.fonts.map((f) => f.file);
   const names = opts.fonts.map((f) => f.name);
   const results: FontGeneratorFontFaceDeclaration[] = [];
   try {
-    await promiseMap(
-      await readAllFiles(paths, allowedFontExtensions),
-      async (cp) => {
-        const content = fs.readFileSync(cp);
-        const nameIndex = paths.indexOf(cp);
-        const fontName = names[nameIndex] || path.basename(cp);
-        const base64Content = content.toString("base64");
-        const mapped = fontMap[path.parse(cp).ext] || {
-          mediaType: "application/octet-stream",
-          format: "unknown",
-        };
-        // Split the base64 content across multiple lines using CSS line continuation
-        const splitBase64 = splitWithLineContinuation(base64Content);
-        results.push({
-          name: fontName,
-          src: `url("data:${mapped.mediaType};base64,${splitBase64}") format("${mapped.format}")`,
-        });
-      },
-    );
+    await promiseMap(await readAllFiles(paths, allowedFontExtensions), async (cp) => {
+      const content = fs.readFileSync(cp);
+      const nameIndex = paths.indexOf(cp);
+      const fontName = names[nameIndex] || path.basename(cp);
+      const base64Content = content.toString("base64");
+      const mapped = fontMap[path.parse(cp).ext] || {
+        mediaType: "application/octet-stream",
+        format: "unknown",
+      };
+      // Split the base64 content across multiple lines using CSS line continuation
+      const splitBase64 = splitWithLineContinuation(base64Content);
+      results.push({
+        name: fontName,
+        src: `url("data:${mapped.mediaType};base64,${splitBase64}") format("${mapped.format}")`,
+      });
+    });
   } catch (err) {
     console.error(err);
   }
@@ -212,9 +189,7 @@ const getCSSFontFaces = async (
 const getFontFaceDeclarationsFromJSONPayload = async (
   json: JSONObjectHTMLSuccessRequest | JSONObjectImageSuccessRequest,
 ): Promise<FontGeneratorFontFaceDeclaration[]> => {
-  const fontSettingsFontsAsArrayKeys: string[] = Object.keys(
-    json.data.fontSettings.fonts,
-  );
+  const fontSettingsFontsAsArrayKeys: string[] = Object.keys(json.data.fontSettings.fonts);
   const fontGeneratorFontFaceFonts: FontGeneratorFontFaceOptions["fonts"] = (
     fontSettingsFontsAsArrayKeys as Array<keyof typeof FontSettingsFonts>
   ).flatMap((key) => {
@@ -230,10 +205,9 @@ const getFontFaceDeclarationsFromJSONPayload = async (
       } as FontGeneratorFontFaceOptions["fonts"][0],
     ];
   });
-  const fontFaceDeclarations: FontGeneratorFontFaceDeclaration[] =
-    await getCSSFontFaces({
-      fonts: fontGeneratorFontFaceFonts,
-    });
+  const fontFaceDeclarations: FontGeneratorFontFaceDeclaration[] = await getCSSFontFaces({
+    fonts: fontGeneratorFontFaceFonts,
+  });
   return fontFaceDeclarations;
 };
 

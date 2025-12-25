@@ -6,9 +6,7 @@ const replaceProcessEnv = (input: string): string => {
   });
 };
 
-export const getOutputDir = async (
-  userConfigOutDir?: string,
-): Promise<string> => {
+export const getOutputDir = async (userConfigOutDir?: string): Promise<string> => {
   if (userConfigOutDir) {
     if (userConfigOutDir.startsWith("~")) {
       const homeDir = process.env.HOME || process.env.USERPROFILE || null;
@@ -39,16 +37,10 @@ export const getFullOutputPath = async (
   filenamePattern: string,
 ): Promise<string> => {
   outputDir = await getOutputDir(outputDir);
-  return `${outputDir.replace(/\/+$/, "")}/${generateFilename(
-    filenamePattern,
-    filename,
-  )}`;
+  return `${outputDir.replace(/\/+$/, "")}/${generateFilename(filenamePattern, filename)}`;
 };
 
-export const generateFilename = (
-  pattern: string,
-  originalFilename: string,
-): string => {
+export const generateFilename = (pattern: string, originalFilename: string): string => {
   const now = new Date();
   const pad = (num: number, size: number) => {
     let s = num.toString();
@@ -59,18 +51,9 @@ export const generateFilename = (
     "%t": `${now.getFullYear()}${pad(now.getMonth() + 1, 2)}${pad(
       now.getDate(),
       2,
-    )}_${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}${pad(
-      now.getSeconds(),
-      2,
-    )}`,
-    "%time": `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}${pad(
-      now.getSeconds(),
-      2,
-    )}`,
-    "%date": `${now.getFullYear()}${pad(now.getMonth() + 1, 2)}${pad(
-      now.getDate(),
-      2,
-    )}`,
+    )}_${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}${pad(now.getSeconds(), 2)}`,
+    "%time": `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}${pad(now.getSeconds(), 2)}`,
+    "%date": `${now.getFullYear()}${pad(now.getMonth() + 1, 2)}${pad(now.getDate(), 2)}`,
     "%file_name": originalFilename.replace(/\.[^/.]+$/, ""),
     "%file_extension": originalFilename.split(".").pop() || "",
     "%unixtime": Math.floor(now.getTime() / 1000).toString(),

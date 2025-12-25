@@ -11,10 +11,7 @@ import type {
   NodeHTMLToImageBuffer,
 } from "./types";
 
-import {
-  checkPlaywrightInstalled,
-  installPlaywright,
-} from "./utils/playwright";
+import { checkPlaywrightInstalled, installPlaywright } from "./utils/playwright";
 import path from "node:path";
 import os from "node:os";
 
@@ -43,11 +40,7 @@ const handleHealth = async () => {
 const handleInstall = async () => {
   const cacheDir = path.join(os.homedir(), ".cache", "playwright");
 
-  const progressCallback = (progress: {
-    status: string;
-    message: string;
-    progress?: number;
-  }) => {
+  const progressCallback = (progress: { status: string; message: string; progress?: number }) => {
     // Send progress update as JSON on a single line
     // Write directly - process.stdout.write is non-blocking by default
     const progressJson = JSON.stringify({
@@ -109,10 +102,7 @@ const main = async () => {
     return;
   }
 
-  let json:
-    | JSONObjectImageSuccessRequest
-    | JSONObjectHTMLSuccessRequest
-    | JSONObjectRTFSuccessRequest;
+  let json: JSONObjectImageSuccessRequest | JSONObjectHTMLSuccessRequest | JSONObjectRTFSuccessRequest;
 
   let bufstr: NodeHTMLToImageBuffer | Buffer | string | null = null;
   let filepath: string = "";

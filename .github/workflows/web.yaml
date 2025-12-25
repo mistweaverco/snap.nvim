@@ -6,8 +6,8 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/web.yaml'
-      - 'web/**'
+      - ".github/workflows/web.yaml"
+      - "web/**"
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -38,11 +38,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.3'
+          bun-version: "1.3.3"
       - name: Cache Bun
         uses: actions/cache@v4
         with:
@@ -51,9 +51,9 @@ jobs:
           restore-keys: |
             linux-bun-web-${{ hashFiles('**/bun.lock') }}
       - name: Install web dependencies
-        run: cd web && bun install --frozen-lockfile
+        run: bun run install --frozen-lockfile
       - name: Create Website
-        run: cd web && bun run build
+        run: bun run web:build
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact

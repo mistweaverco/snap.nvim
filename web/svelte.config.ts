@@ -1,13 +1,13 @@
-import tailwindcss from '@tailwindcss/vite';
-import type { Config } from '@sveltejs/kit';
-import adapter from '@sveltejs/adapter-static';
+import tailwindcss from "@tailwindcss/vite";
+import type { Config } from "@sveltejs/kit";
+import adapter from "@sveltejs/adapter-static";
 
 const config: Config = {
   kit: {
-    adapter: adapter()
+    adapter: adapter(),
   },
-  extensions: ['.svelte'],
-  plugins: [tailwindcss()]
+  extensions: [".svelte"],
+  plugins: [tailwindcss()],
 };
 
 export default config;
