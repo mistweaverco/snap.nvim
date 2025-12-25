@@ -122,15 +122,11 @@ if [ "$CI" == false ]; then
   exit 0
 fi
 
-echo " 🎭 Installing Playwright Chromium..."
-echo
-bunx playwright install chromium || { echo " ❌ Failed to install Chromium.";echo;exit 1; }
-
 echo " 🧹 Removing unused locales..."
 echo
 # Find and remove unused locale files, but keep en-US.pak and required files
 # Use a loop to handle multiple chromium directories
-for chromium_dir in ~/.cache/ms-playwright/chromium-*; do
+for chromium_dir in ~/.cache/ms-playwright/chromium_headless_shell*; do
   if [ -d "$chromium_dir" ]; then
     find "$chromium_dir" -path "*locales*" -type f ! -name "en-US.pak" -delete || true
   fi
@@ -141,17 +137,17 @@ done
 
 echo " 📦 Bundling Playwright..."
 echo
-# Create playwright directory in dist
-mkdir -p "dist/playwright"
 
 # Copy only the latest playwright chromium version to dist
 PLAYWRIGHT_FOUND=false
-LATEST_CHROMIUM_DIR=$(ls -1d ~/.cache/ms-playwright/chromium-* 2>/dev/null | sort -V | tail -1)
+LATEST_CHROMIUM_DIR=$(ls -1d ~/.cache/ms-playwright/chromium_headless_shell*/chrome-headless-shell*/ 2>/dev/null | sort -V | tail -1)
 
 if [ -n "$LATEST_CHROMIUM_DIR" ] && [ -d "$LATEST_CHROMIUM_DIR" ]; then
   # Extract just the directory name (e.g., chromium-1200)
   CHROMIUM_VERSION=$(basename "$LATEST_CHROMIUM_DIR")
-  cp -R "$LATEST_CHROMIUM_DIR" "dist/playwright/$CHROMIUM_VERSION" || { echo " ❌ Failed to copy Playwright.";echo;exit 1; }
+  # Create playwright directory and copy contents (not the directory itself)
+  mkdir -p "dist/playwright"
+  cp -R "$LATEST_CHROMIUM_DIR"/* "dist/playwright/" || { echo " ❌ Failed to copy Playwright.";echo;exit 1; }
   PLAYWRIGHT_FOUND=true
   echo " ✅ Bundled Chromium version: $CHROMIUM_VERSION"
   echo
@@ -239,7 +235,8 @@ case "$PLATFORM" in
     ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.zip"
     cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
     if [ -d "playwright" ]; then
-      create_zip "$ARCHIVE_NAME" "$BINARY_NAME" "playwright/" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
+      # Remove trailing slash for consistent behavior
+      create_zip "$ARCHIVE_NAME" "$BINARY_NAME" "playwright" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
     else
       create_zip "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
     fi
@@ -249,7 +246,8 @@ case "$PLATFORM" in
     ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.tar.gz"
     cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
     if [ -d "playwright" ]; then
-      tar --use-compress-program='gzip -9' -cf "$ARCHIVE_NAME" "$BINARY_NAME" playwright/ || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
+      # Archive with relative paths (no trailing slash on playwright to ensure consistent behavior)
+      tar --use-compress-program='gzip -9' -cf "$ARCHIVE_NAME" "$BINARY_NAME" playwright || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
     else
       tar --use-compress-program='gzip -9' -cf "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
     fi
