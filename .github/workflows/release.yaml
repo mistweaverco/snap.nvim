@@ -91,6 +91,14 @@ jobs:
           restore-keys: |
             bun-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
 
+      - name: Cache Playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
+          restore-keys: |
+            playwright-${{ hashFiles('**/bun.lock') }}-${{ matrix.runner }}
+
       - name: Set version (Unix)
         if: runner.os != 'Windows'
         run: |
