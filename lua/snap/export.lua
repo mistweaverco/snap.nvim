@@ -115,15 +115,17 @@ local function install_backend(progress_callback, completion_callback)
     debounce_timer = vim.fn.timer_start(150, function()
       if pending_progress and progress_callback then
         -- Only report 100% or "completed" once
-        if (pending_progress.progress == 100 or pending_progress.status == "completed") then
+        if pending_progress.progress == 100 or pending_progress.status == "completed" then
           if not progress_100_reported then
             progress_callback(pending_progress)
             progress_100_reported = true
           end
         else
           -- Only report if status or progress value changed
-          if pending_progress.status ~= last_progress_status or
-            (pending_progress.progress and pending_progress.progress ~= last_progress_value) then
+          if
+            pending_progress.status ~= last_progress_status
+            or (pending_progress.progress and pending_progress.progress ~= last_progress_value)
+          then
             progress_callback(pending_progress)
             last_progress_status = pending_progress.status
             last_progress_value = pending_progress.progress
@@ -195,7 +197,9 @@ local function install_backend(progress_callback, completion_callback)
       end
       -- Flush any pending progress immediately
       if pending_progress and progress_callback then
-        if not (pending_progress.progress == 100 or pending_progress.status == "completed") or not progress_100_reported then
+        if
+          not (pending_progress.progress == 100 or pending_progress.status == "completed") or not progress_100_reported
+        then
           progress_callback(pending_progress)
           if pending_progress.progress == 100 or pending_progress.status == "completed" then
             progress_100_reported = true
@@ -273,11 +277,18 @@ local function run_backend_export(opts, export_type, success_message)
 
   -- Inner function to proceed with the actual export
   local function proceed_with_export()
+    -- Choose payload generation method based on options
+    local payload_func = payload.get_backend_payload_from_buf
+    if opts.use_ui_attach then
+      payload_func = payload.get_backend_payload_from_ui_scene
+    end
+
     -- Use async callback to avoid blocking UI
-    payload.get_backend_payload_from_buf({
+    payload_func({
       range = opts.range,
       filepath = opts.filepath,
       type = export_type,
+      use_cache = opts.use_cache,
     }, function(jsonPayload)
       -- Validate payload structure
       if not jsonPayload or not jsonPayload.data or not jsonPayload.data.type then
@@ -384,13 +395,23 @@ end
 ---Export current buffer to RTF
 ---@param opts SnapExportOptions|nil Export options
 function M.rtf_to_clipboard(opts)
-  run_backend_export(opts, types.SnapPayloadType.rtf, "Exported RTF to: %s")
+  opts = opts or {}
+  run_backend_export({
+    range = opts.range,
+    use_cache = opts.use_cache,
+    use_ui_attach = opts.use_ui_attach,
+  }, types.SnapPayloadType.rtf, "Exported RTF to: %s")
 end
 
 ---Export current buffer to HTML
 ---@param opts SnapExportOptions|nil Export options
 function M.html_to_clipboard(opts)
-  run_backend_export(opts, types.SnapPayloadType.html, "Exported HTML to: %s")
+  opts = opts or {}
+  run_backend_export({
+    range = opts.range,
+    use_cache = opts.use_cache,
+    use_ui_attach = opts.use_ui_attach,
+  }, types.SnapPayloadType.html, "Exported HTML to: %s")
 end
 
 ---Export current buffer to image
@@ -402,7 +423,11 @@ function M.image_to_clipboard(opts)
     Logger.error("No valid save path found for screenshots. Please set 'output_dir' in config")
     return
   end
-  run_backend_export({ range = opts.range }, types.SnapPayloadType.image, "Exported image to: %s")
+  run_backend_export({
+    range = opts.range,
+    use_cache = opts.use_cache,
+    use_ui_attach = opts.use_ui_attach,
+  }, types.SnapPayloadType.image, "Exported image to: %s")
 end
 
 return M

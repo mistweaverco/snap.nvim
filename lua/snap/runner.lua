@@ -12,25 +12,32 @@ function M.run(opts)
   opts.type = opts.type or types.SnapPayloadType.image
 
   Backend.ensure_installed(function()
+    -- Prepare export options
+    local export_opts = {
+      range = opts.range,
+      use_cache = opts.use_cache,
+      use_ui_attach = opts.use_ui_attach,
+    }
+
     -- If range is provided from command (visual mode), use it
     if opts.range then
       if opts.type == types.SnapPayloadType.image then
-        export.image_to_clipboard({ range = opts.range })
+        export.image_to_clipboard(export_opts)
       elseif opts.type == types.SnapPayloadType.html then
-        export.html_to_clipboard({ range = opts.range })
+        export.html_to_clipboard(export_opts)
       elseif opts.type == types.SnapPayloadType.rtf then
-        export.rtf_to_clipboard({ range = opts.range })
+        export.rtf_to_clipboard(export_opts)
       else
         Logger.error("Unsupported export type: " .. tostring(opts.type))
       end
       return
     end
     if opts.type == types.SnapPayloadType.image then
-      export.image_to_clipboard()
+      export.image_to_clipboard(export_opts)
     elseif opts.type == types.SnapPayloadType.html then
-      export.html_to_clipboard()
+      export.html_to_clipboard(export_opts)
     elseif opts.type == types.SnapPayloadType.rtf then
-      export.rtf_to_clipboard()
+      export.rtf_to_clipboard(export_opts)
     else
       Logger.error("Unsupported export type: " .. tostring(opts.type))
     end

@@ -1,5 +1,6 @@
 local types = require("snap.types")
 local Config = require("snap.config")
+local Logger = require("snap.logger")
 local highlights_map = require("snap.highlights.map")
 local highlights_collection = require("snap.highlights.collection")
 local highlights_utils = require("snap.highlights.utils")
@@ -432,6 +433,211 @@ function M.get_backend_payload_from_buf(opts, callback)
     vim.api.nvim_win_set_cursor(vim.api.nvim_get_current_win(), original_cursor)
     return snap_payload
   end
+end
+
+---Generate backend JSON payload from UI scene
+---@param opts SnapExportOptions|nil Export options
+---@param callback function|nil Optional callback function(payload) - if provided, processing is async
+---@return SnapPayload|nil JSON payload for backend (nil if callback is provided)
+function M.get_backend_payload_from_ui_scene(opts, callback)
+  opts = opts or {}
+  local ui_attach = require("snap.ui_attach")
+  local highlights_utils = require("snap.highlights.utils")
+
+  local user_config = Config.get()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local default_bg = highlights_utils.get_default_bg()
+  local default_fg = highlights_utils.get_default_fg()
+
+  -- Use cache option
+  local use_cache = opts.use_cache ~= false -- Default to true
+
+  -- Clear cache if requested
+  if not use_cache then
+    ui_attach.clear_cache()
+  end
+
+  -- Check if nvim_ui_attach is available
+  -- Note: nvim_ui_attach is typically for external UIs connecting to Neovim,
+  -- not for plugins running inside Neovim. It may not be available or work
+  -- as expected when called from within a plugin.
+  local ui_attach_exists = vim.api.nvim_ui_attach ~= nil
+
+  if not ui_attach_exists then
+    Logger.warn("nvim_ui_attach API not available")
+    Logger.warn("UI attach mode is not supported in this Neovim version/configuration")
+    Logger.warn("Falling back to buffer-based method")
+    -- Fall back to buffer-based method
+    return M.get_backend_payload_from_buf(opts, callback)
+  end
+
+  -- Attach to UI and capture scene
+  local client_id = ui_attach.attach({
+    use_cache = use_cache,
+    timeout = 1000, -- 1 second to capture state
+  }, function(scene, error)
+    if error then
+      Logger.warn("UI attach failed: " .. tostring(error))
+      Logger.warn("Falling back to buffer-based method")
+      -- Fall back to buffer-based method on error
+      return M.get_backend_payload_from_buf(opts, callback)
+    end
+
+    if not scene then
+      Logger.warn("No scene captured from UI attach - falling back to buffer-based method")
+      -- Fall back to buffer-based method
+      return M.get_backend_payload_from_buf(opts, callback)
+    end
+
+    -- Convert UI scene to payload format
+    local tabstop = vim.api.nvim_buf_get_option(bufnr, "tabstop")
+
+    local snap_payload = {
+      success = true,
+      debug = user_config.development_mode and true or false,
+      data = {
+        additionalTemplateData = user_config.additional_template_data or {},
+        tabstop = tabstop,
+        code = {},
+        theme = {
+          bgColor = scene.default_bg or default_bg,
+          fgColor = scene.default_fg or default_fg,
+        },
+        template = user_config.template or "default",
+        toClipboard = user_config.copy_to_clipboard or Config.defaults.copy_to_clipboard,
+        outputDir = user_config.output_dir or Config.defaults.output_dir,
+        filename = M.get_filename(bufnr),
+        filenamePattern = user_config.filename_pattern or Config.defaults.filename_pattern,
+        fontSettings = user_config.font_settings or Config.defaults.font_settings,
+        outputImageFormat = types.SnapImageOutputFormat.png,
+        templateFilepath = user_config.templateFilepath or Config.defaults.templateFilepath,
+        transparent = true,
+        minWidth = 0,
+        type = (opts and opts.type) or types.SnapPayloadType.image,
+      },
+    }
+
+    -- Convert grids to code lines
+    -- Find the main grid (usually grid 1) or use the first grid
+    local main_grid = nil
+    for _, grid in pairs(scene.grids) do
+      if grid.id == 1 or (not main_grid and grid.lines and next(grid.lines)) then
+        main_grid = grid
+        break
+      end
+    end
+
+    if main_grid and main_grid.lines then
+      local longest_line_len = 0
+      local code_lines = {}
+
+      -- Process each line in the grid
+      for row = 0, (main_grid.height or 0) - 1 do
+        local line = main_grid.lines[row]
+        if line and line.cells then
+          local line_items = {}
+          local line_text = ""
+
+          -- Process cells and group by highlight
+          local current_hl_id = nil
+          local current_segment = ""
+
+          for _, cell in ipairs(line.cells) do
+            local hl_id = cell.hl_id or 0
+            local text = cell.text or ""
+
+            if hl_id ~= current_hl_id then
+              -- Save previous segment
+              if current_segment ~= "" and current_hl_id then
+                local hl_attr = scene.highlights[current_hl_id]
+                if hl_attr then
+                  table.insert(line_items, {
+                    fg = hl_attr.foreground and string.format("#%06x", hl_attr.foreground) or default_fg,
+                    bg = hl_attr.background and string.format("#%06x", hl_attr.background) or default_bg,
+                    text = current_segment,
+                    bold = hl_attr.bold or false,
+                    italic = hl_attr.italic or false,
+                    underline = hl_attr.underline or false,
+                    hl_name = "UIHighlight" .. tostring(current_hl_id),
+                  })
+                else
+                  table.insert(line_items, {
+                    fg = default_fg,
+                    bg = default_bg,
+                    text = current_segment,
+                    bold = false,
+                    italic = false,
+                    underline = false,
+                    hl_name = "Normal",
+                  })
+                end
+              end
+              current_hl_id = hl_id
+              current_segment = text
+            else
+              current_segment = current_segment .. text
+            end
+            line_text = line_text .. text
+          end
+
+          -- Save last segment
+          if current_segment ~= "" and current_hl_id then
+            local hl_attr = scene.highlights[current_hl_id]
+            if hl_attr then
+              table.insert(line_items, {
+                fg = hl_attr.foreground and string.format("#%06x", hl_attr.foreground) or default_fg,
+                bg = hl_attr.background and string.format("#%06x", hl_attr.background) or default_bg,
+                text = current_segment,
+                bold = hl_attr.bold or false,
+                italic = hl_attr.italic or false,
+                underline = hl_attr.underline or false,
+                hl_name = "UIHighlight" .. tostring(current_hl_id),
+              })
+            else
+              table.insert(line_items, {
+                fg = default_fg,
+                bg = default_bg,
+                text = current_segment,
+                bold = false,
+                italic = false,
+                underline = false,
+                hl_name = "Normal",
+              })
+            end
+          end
+
+          if #line_items > 0 then
+            table.insert(code_lines, line_items)
+            if #line_text > longest_line_len then
+              longest_line_len = #line_text
+            end
+          end
+        end
+      end
+
+      snap_payload.data.code = code_lines
+
+      -- Calculate minimum width
+      local font_size = snap_payload.data.fontSettings.size or 14
+      local char_width_factor = 0.6
+      local padding = 30
+      snap_payload.data.minWidth = math.ceil(longest_line_len * font_size * char_width_factor) + padding
+    end
+
+    if callback then
+      callback(snap_payload)
+    end
+  end)
+
+  if not client_id then
+    Logger.error("Failed to attach to UI")
+    if callback then
+      callback(nil)
+    end
+    return nil
+  end
+
+  return nil -- Async, returns nil
 end
 
 M.get_absolute_plugin_path = get_absolute_plugin_path

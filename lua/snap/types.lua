@@ -57,11 +57,15 @@ M.SnapConfigFontSettingsFont = {
 ---@class SnapExportOptions
 ---@field range SnapVisualRange|nil Visual range for taking a screenshot (optional)
 ---@field type SnapPayloadType|nil Type of screenshot to take ("image" or "html", defaults to "image" if nil)
+---@field use_cache boolean|nil Whether to use highlight ID cache (defaults to true)
+---@field use_ui_attach boolean|nil Whether to use UI attach mode instead of buffer-based method (defaults to false)
 
 ---SnapRunOptions options for taking a screenshot command
 ---@class SnapRunOptions
 ---@field type SnapPayloadType|nil Type of screenshot to take ("image" or "html", defaults to "image" if nil)
 ---@field range SnapVisualRange|nil Visual range for taking a screenshot (optional)
+---@field use_cache boolean|nil Whether to use highlight ID cache (defaults to true)
+---@field use_ui_attach boolean|nil Whether to use UI attach mode instead of buffer-based method (defaults to false)
 
 ---User configuration for the screenshot plugin, extending SnapConfig
 ---@class SnapUserConfig

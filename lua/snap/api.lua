@@ -25,19 +25,66 @@ M.setup = function(config)
       }
     end
 
-    local type = opts.args ~= "" and opts.args or Types.SnapPayloadType.image
-    if Types.SnapPayloadType[type] == nil then
-      Logger.error("Invalid payload type: " .. type, "Valid types are:", Types.SnapPayloadType)
-      return
+    -- Parse arguments: support both type and key-value pairs/instructions
+    -- Examples:
+    --   :Snap image
+    --   :Snap image cache=false
+    --   :Snap image nocache
+    --   :Snap image cache=false ui=true
+    local args_str = opts.args or ""
+    local args_list = {}
+
+    -- Split arguments by spaces
+    if args_str ~= "" then
+      for arg in args_str:gmatch("%S+") do
+        table.insert(args_list, arg)
+      end
+    end
+
+    -- Parse arguments
+    local type = Types.SnapPayloadType.image -- Default
+    local command_opts = {
+      use_cache = true, -- Default to caching
+      use_ui_attach = false, -- Default to buffer-based method
+    }
+
+    for _, arg in ipairs(args_list) do
+      -- Check if it's a payload type
+      if Types.SnapPayloadType[arg] ~= nil then
+        type = arg
+      -- Check if it's a key-value pair (e.g., cache=false)
+      elseif arg:find("=") then
+        local key, value = arg:match("([^=]+)=(.+)")
+        if key and value then
+          key = key:lower()
+          if key == "cache" then
+            command_opts.use_cache = value:lower() ~= "false" and value:lower() ~= "0"
+          elseif key == "ui" or key == "ui_attach" then
+            command_opts.use_ui_attach = value:lower() == "true" or value:lower() == "1"
+          end
+        end
+      -- Check if it's an instruction (e.g., nocache)
+      else
+        local instruction = arg:lower()
+        if instruction == "nocache" then
+          command_opts.use_cache = false
+        elseif instruction == "cache" then
+          command_opts.use_cache = true
+        elseif instruction == "ui" or instruction == "ui_attach" then
+          command_opts.use_ui_attach = true
+        end
+      end
     end
 
     Runner.run({
       type = type,
       range = range,
+      use_cache = command_opts.use_cache,
+      use_ui_attach = command_opts.use_ui_attach,
     })
   end, {
     desc = "Take a screenshot of the current file or visual selection",
-    nargs = "?",
+    nargs = "*", -- Allow multiple arguments
     range = true,
   })
 end
