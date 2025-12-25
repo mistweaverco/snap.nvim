@@ -111,40 +111,110 @@ local function download_file_async(url, output_path, progress_callback, callback
   }
 
   local last_progress = 0
+  local max_progress_shown = 0 -- Track the highest progress we've actually shown to user
   local download_completed = false
   local final_stats = nil
   local progress_100_reported = false
   local debounce_timer = nil
   local pending_progress = nil
+  local last_stderr_progress = 0
+  local first_progress_shown = false
+  local last_update_time = 0
 
-  -- Debounced progress callback to prevent rapid updates
+  -- Throttled progress callback (max once every 3 seconds, but show first immediately)
   local function report_progress(progress_data)
-    pending_progress = progress_data
-    -- Clear existing timer
-    if debounce_timer then
-      vim.fn.timer_stop(debounce_timer)
+    -- Immediately stop processing if we've already completed
+    if download_completed or progress_100_reported then
+      return
     end
-    -- Set new timer to report after 100ms
-    debounce_timer = vim.fn.timer_start(100, function()
-      if pending_progress and progress_callback then
-        -- Only report 100% once
-        if pending_progress.progress == 100 then
-          if not progress_100_reported then
+
+    -- Ignore any progress lower than what we've already shown (prevents showing stale low values)
+    if progress_data.progress and progress_data.progress < max_progress_shown then
+      return
+    end
+
+    -- If this is 100%, mark as completed immediately to prevent further updates
+    if progress_data.progress and progress_data.progress >= 100 then
+      download_completed = true
+      progress_100_reported = true
+      max_progress_shown = 100
+      -- Report immediately, no throttle for completion
+      if progress_callback then
+        progress_callback(progress_data)
+      end
+      -- Stop any pending timer
+      if debounce_timer then
+        vim.fn.timer_stop(debounce_timer)
+        debounce_timer = nil
+      end
+      pending_progress = nil
+      return
+    end
+
+    -- Show first progress update immediately
+    if not first_progress_shown then
+      if progress_callback then
+        progress_callback(progress_data)
+        max_progress_shown = progress_data.progress or 0
+        first_progress_shown = true
+        last_update_time = vim.fn.reltime()
+      end
+      return
+    end
+
+    -- For subsequent updates, check if 3 seconds have passed
+    local current_time = vim.fn.reltime()
+    local elapsed = vim.fn.reltimefloat(vim.fn.reltime(last_update_time, current_time))
+
+    if elapsed >= 3.0 then
+      -- 3 seconds have passed, show update immediately
+      if progress_callback then
+        progress_callback(progress_data)
+        max_progress_shown = math.max(max_progress_shown, progress_data.progress or 0)
+        last_update_time = current_time
+      end
+      -- Clear any pending timer
+      if debounce_timer then
+        vim.fn.timer_stop(debounce_timer)
+        debounce_timer = nil
+      end
+      pending_progress = nil
+    else
+      -- Less than 3 seconds, queue for later
+      pending_progress = progress_data
+      -- Clear existing timer
+      if debounce_timer then
+        vim.fn.timer_stop(debounce_timer)
+      end
+      -- Set timer to report after remaining time (or at least 3 seconds total)
+      local remaining_time = math.ceil((3.0 - elapsed) * 1000)
+      debounce_timer = vim.fn.timer_start(remaining_time, function()
+        -- Double-check we haven't completed while timer was waiting
+        if download_completed or progress_100_reported then
+          pending_progress = nil
+          return
+        end
+        -- Double-check the progress is still valid (not stale)
+        if pending_progress and pending_progress.progress and pending_progress.progress >= max_progress_shown then
+          if progress_callback then
             progress_callback(pending_progress)
-            progress_100_reported = true
-            download_completed = true
+            max_progress_shown = math.max(max_progress_shown, pending_progress.progress)
+            last_update_time = vim.fn.reltime()
           end
-        else
-          progress_callback(pending_progress)
         end
         pending_progress = nil
-      end
-    end)
+      end)
+    end
   end
 
   local job_id = vim.fn.jobstart(cmd, {
     env = vim.fn.environ(),
     on_stdout = vim.schedule_wrap(function(_, data, _)
+      -- Stop processing if we've already completed
+      if download_completed or progress_100_reported then
+        return
+      end
+
       -- Parse the write-out data from stdout (only available at the end)
       if data and #data > 0 then
         local lines = {}
@@ -166,11 +236,13 @@ local function download_file_async(url, output_path, progress_callback, callback
           }
 
           -- Only report if we haven't completed yet and have valid data
-          if size_total > 0 and not download_completed then
+          if size_total > 0 and not download_completed and not progress_100_reported then
             local progress = math.floor((size_download / size_total) * 100)
-            -- Cap at 99% to avoid showing 100% multiple times (let on_exit handle final 100%)
-            progress = math.min(99, progress)
-            if progress ~= last_progress then
+            -- Only report if progress increased and is higher than what we've shown
+            -- This prevents showing stale low values
+            if progress > last_progress and progress >= max_progress_shown then
+              -- Cap at 99% to avoid showing 100% multiple times (let on_exit handle final 100%)
+              progress = math.min(99, progress)
               local speed_mb = speed / 1024 / 1024
               local message = string.format("Downloading backend... %d%% (%.2f MB/s)", progress, speed_mb)
               report_progress({ progress = progress, message = message })
@@ -183,24 +255,57 @@ local function download_file_async(url, output_path, progress_callback, callback
     on_stderr = vim.schedule_wrap(function(_, data, _)
       -- Parse curl's -# progress bar from stderr for real-time updates
       -- Format: "##..." where each # represents ~2% progress (50 # = 100%)
-      if data and #data > 0 and not download_completed then
+      -- Note: curl uses \r (carriage return) to overwrite the same line, so we need to
+      -- extract the last progress state after splitting by \r
+      -- Stop processing if we've already completed
+      if download_completed or progress_100_reported then
+        return
+      end
+
+      if data and #data > 0 then
         for _, line in ipairs(data) do
           if line ~= "" then
-            -- Count # characters in the line
+            -- First, check if line contains 100% (completion indicator)
+            if line:match("100%.?0?%%") then
+              -- This is 100%, report it immediately
+              if not download_completed and not progress_100_reported then
+                report_progress({
+                  progress = 100,
+                  message = "Downloading backend... 100%",
+                })
+              end
+              return
+            end
+
+            -- Split by carriage return to get the last progress state
+            -- curl overwrites the same line with \r, so the last segment is current state
+            local segments = vim.split(line, "\r", { trimempty = true })
+            local last_segment = segments[#segments] or line
+
+            -- Count # characters in the last segment only (current progress state)
             local hash_count = 0
-            for _ in line:gmatch("#") do
+            for _ in last_segment:gmatch("#") do
               hash_count = hash_count + 1
             end
+
             -- Simple progress bar has ~50 # characters for 100%
             if hash_count > 0 then
               local estimated_progress = math.min(99, math.floor((hash_count / 50) * 100))
-              -- Only update if progress changed and we haven't completed
-              if estimated_progress ~= last_progress and estimated_progress < 100 then
-                report_progress({
-                  progress = estimated_progress,
-                  message = string.format("Downloading backend... %d%%", estimated_progress),
-                })
-                last_progress = estimated_progress
+              -- Only update if progress increased (not decreased) and is higher than what we've shown
+              -- This prevents showing stale low percentages after we've shown high progress
+              if
+                estimated_progress > last_stderr_progress
+                and estimated_progress >= max_progress_shown
+                and estimated_progress < 100
+              then
+                -- Double-check we haven't completed
+                if not download_completed and not progress_100_reported then
+                  report_progress({
+                    progress = estimated_progress,
+                    message = string.format("Downloading backend... %d%%", estimated_progress),
+                  })
+                  last_stderr_progress = estimated_progress
+                end
               end
             end
           end
@@ -208,16 +313,17 @@ local function download_file_async(url, output_path, progress_callback, callback
       end
     end),
     on_exit = vim.schedule_wrap(function(_, exit_code, _)
+      -- Mark as completed immediately to prevent any further progress updates
+      download_completed = true
+
       -- Stop any pending debounce timer
       if debounce_timer then
         vim.fn.timer_stop(debounce_timer)
         debounce_timer = nil
       end
-      -- Flush any pending progress immediately
-      if pending_progress and progress_callback and pending_progress.progress ~= 100 then
-        progress_callback(pending_progress)
-        pending_progress = nil
-      end
+      -- Don't flush pending progress - it might be stale (low values from stderr)
+      -- Just clear it
+      pending_progress = nil
 
       if exit_code ~= 0 then
         Logger.error("Download failed with exit code: " .. tostring(exit_code))
@@ -247,7 +353,6 @@ local function download_file_async(url, output_path, progress_callback, callback
           progress_callback({ progress = 100, message = "Download completed!" })
         end
         progress_100_reported = true
-        download_completed = true
       end
       Logger.notify("Snap.nvim backend downloaded successfully!", Logger.LoggerLogLevels.info)
       if callback then
@@ -314,6 +419,82 @@ local function extract_zip_async(archive_path, extract_dir, progress_callback, c
   local total_files = 0
   local extracted_files = 0
   local last_progress = 0
+  local extract_throttle_timer = nil
+  local pending_extract_progress = nil
+  local extract_max_progress_shown = 0
+  local first_extract_progress_shown = false
+  local last_extract_update_time = 0
+
+  -- Throttled progress callback for extraction (max once every 3 seconds, but show first immediately)
+  local function report_extract_progress(progress_data)
+    -- If this is 100%, report immediately
+    if progress_data.progress and progress_data.progress >= 100 then
+      if extract_throttle_timer then
+        vim.fn.timer_stop(extract_throttle_timer)
+        extract_throttle_timer = nil
+      end
+      if progress_callback then
+        progress_callback(progress_data)
+        extract_max_progress_shown = 100
+      end
+      pending_extract_progress = nil
+      return
+    end
+
+    -- Ignore progress lower than what we've shown
+    if progress_data.progress and progress_data.progress < extract_max_progress_shown then
+      return
+    end
+
+    -- Show first progress update immediately
+    if not first_extract_progress_shown then
+      if progress_callback then
+        progress_callback(progress_data)
+        extract_max_progress_shown = progress_data.progress or 0
+        first_extract_progress_shown = true
+        last_extract_update_time = vim.fn.reltime()
+      end
+      return
+    end
+
+    -- For subsequent updates, check if 3 seconds have passed
+    local current_time = vim.fn.reltime()
+    local elapsed = vim.fn.reltimefloat(vim.fn.reltime(last_extract_update_time, current_time))
+
+    if elapsed >= 3.0 then
+      -- 3 seconds have passed, show update immediately
+      if progress_callback then
+        progress_callback(progress_data)
+        extract_max_progress_shown = math.max(extract_max_progress_shown, progress_data.progress or 0)
+        last_extract_update_time = current_time
+      end
+      -- Clear any pending timer
+      if extract_throttle_timer then
+        vim.fn.timer_stop(extract_throttle_timer)
+        extract_throttle_timer = nil
+      end
+      pending_extract_progress = nil
+    else
+      -- Less than 3 seconds, queue for later
+      pending_extract_progress = progress_data
+      -- Clear existing timer
+      if extract_throttle_timer then
+        vim.fn.timer_stop(extract_throttle_timer)
+      end
+      -- Set timer to report after remaining time
+      local remaining_time = math.ceil((3.0 - elapsed) * 1000)
+      extract_throttle_timer = vim.fn.timer_start(remaining_time, function()
+        if pending_extract_progress and progress_callback then
+          if pending_extract_progress.progress and pending_extract_progress.progress >= extract_max_progress_shown then
+            progress_callback(pending_extract_progress)
+            extract_max_progress_shown = math.max(extract_max_progress_shown, pending_extract_progress.progress)
+            last_extract_update_time = vim.fn.reltime()
+          end
+        end
+        pending_extract_progress = nil
+      end)
+    end
+  end
 
   local job_id = vim.fn.jobstart(cmd, {
     env = vim.fn.environ(),
@@ -334,10 +515,11 @@ local function extract_zip_async(archive_path, extract_dir, progress_callback, c
             elseif line:match("^%s+inflating:") or line:match("^%s+extracting:") then
               -- Count extracted files
               extracted_files = extracted_files + 1
-              if total_files > 0 and progress_callback then
+              if total_files > 0 then
                 local progress = math.floor((extracted_files / total_files) * 100)
-                if progress ~= last_progress then
-                  progress_callback({
+                -- Only report if progress increased
+                if progress > last_progress then
+                  report_extract_progress({
                     progress = progress,
                     message = string.format(
                       "Extracting backend... %d%% (%d/%d files)",
@@ -356,21 +538,17 @@ local function extract_zip_async(archive_path, extract_dir, progress_callback, c
     end),
     on_stderr = vim.schedule_wrap(function(_, data, _)
       -- unzip sends some info to stderr, we can parse it too
-      if data and #data > 0 then
-        for _, line in ipairs(data) do
-          if line ~= "" and progress_callback then
-            -- Show generic progress if we can't parse specific progress
-            if not line:match("^Archive:") and not line:match("^%s+%d+ files") then
-              progress_callback({
-                progress = nil,
-                message = "Extracting backend...",
-              })
-            end
-          end
-        end
-      end
+      -- We don't report progress from stderr to avoid spam
     end),
     on_exit = vim.schedule_wrap(function(_, exit_code, _)
+      -- Stop any pending throttle timer
+      if extract_throttle_timer then
+        vim.fn.timer_stop(extract_throttle_timer)
+        extract_throttle_timer = nil
+      end
+      -- Don't flush pending progress - it might be stale
+      pending_extract_progress = nil
+
       if exit_code ~= 0 then
         Logger.error("Failed to extract zip archive with exit code: " .. tostring(exit_code))
         if callback then
@@ -379,8 +557,10 @@ local function extract_zip_async(archive_path, extract_dir, progress_callback, c
         return
       end
 
-      if progress_callback then
+      -- Report completion only if we haven't already reported 100%
+      if progress_callback and extract_max_progress_shown < 100 then
         progress_callback({ progress = 100, message = "Extraction completed!" })
+        extract_max_progress_shown = 100
       end
       if callback then
         callback(true)
@@ -430,6 +610,141 @@ local function extract_tar_gz_async(archive_path, extract_dir, progress_callback
   end
 
   local last_progress = 0
+  local tar_throttle_timer = nil
+  local pending_tar_progress = nil
+  local tar_max_progress_shown = 0
+  local file_progress_timer = nil
+  local pending_file_progress = nil
+  local first_tar_progress_shown = false
+  local first_file_progress_shown = false
+  local last_tar_update_time = 0
+  local last_file_update_time = 0
+
+  -- Throttled progress callback for tar extraction (max once every 3 seconds, but show first immediately)
+  local function report_tar_progress(progress_data)
+    -- If this is 100%, report immediately
+    if progress_data.progress and progress_data.progress >= 100 then
+      if tar_throttle_timer then
+        vim.fn.timer_stop(tar_throttle_timer)
+        tar_throttle_timer = nil
+      end
+      if file_progress_timer then
+        vim.fn.timer_stop(file_progress_timer)
+        file_progress_timer = nil
+      end
+      if progress_callback then
+        progress_callback(progress_data)
+        tar_max_progress_shown = 100
+      end
+      pending_tar_progress = nil
+      pending_file_progress = nil
+      return
+    end
+
+    -- For file-based progress (no percentage), throttle to max every 3 seconds
+    if not progress_data.progress then
+      -- Show first file progress immediately
+      if not first_file_progress_shown then
+        if progress_callback then
+          progress_callback(progress_data)
+          first_file_progress_shown = true
+          last_file_update_time = vim.fn.reltime()
+        end
+        return
+      end
+
+      -- For subsequent updates, check if 3 seconds have passed
+      local current_time = vim.fn.reltime()
+      local elapsed = vim.fn.reltimefloat(vim.fn.reltime(last_file_update_time, current_time))
+
+      if elapsed >= 3.0 then
+        -- 3 seconds have passed, show update immediately
+        if progress_callback then
+          progress_callback(progress_data)
+          last_file_update_time = current_time
+        end
+        -- Clear any pending timer
+        if file_progress_timer then
+          vim.fn.timer_stop(file_progress_timer)
+          file_progress_timer = nil
+        end
+        pending_file_progress = nil
+      else
+        -- Less than 3 seconds, queue for later
+        pending_file_progress = progress_data
+        -- Clear existing timer
+        if file_progress_timer then
+          vim.fn.timer_stop(file_progress_timer)
+        end
+        -- Set timer to report after remaining time
+        local remaining_time = math.ceil((3.0 - elapsed) * 1000)
+        file_progress_timer = vim.fn.timer_start(remaining_time, function()
+          if pending_file_progress and progress_callback then
+            progress_callback(pending_file_progress)
+            last_file_update_time = vim.fn.reltime()
+          end
+          pending_file_progress = nil
+          file_progress_timer = nil
+        end)
+      end
+      return
+    end
+
+    -- For percentage-based progress, throttle to max every 3 seconds
+    -- Ignore progress lower than what we've shown
+    if progress_data.progress < tar_max_progress_shown then
+      return
+    end
+
+    -- Show first progress update immediately
+    if not first_tar_progress_shown then
+      if progress_callback then
+        progress_callback(progress_data)
+        tar_max_progress_shown = progress_data.progress or 0
+        first_tar_progress_shown = true
+        last_tar_update_time = vim.fn.reltime()
+      end
+      return
+    end
+
+    -- For subsequent updates, check if 3 seconds have passed
+    local current_time = vim.fn.reltime()
+    local elapsed = vim.fn.reltimefloat(vim.fn.reltime(last_tar_update_time, current_time))
+
+    if elapsed >= 3.0 then
+      -- 3 seconds have passed, show update immediately
+      if progress_callback then
+        progress_callback(progress_data)
+        tar_max_progress_shown = math.max(tar_max_progress_shown, progress_data.progress or 0)
+        last_tar_update_time = current_time
+      end
+      -- Clear any pending timer
+      if tar_throttle_timer then
+        vim.fn.timer_stop(tar_throttle_timer)
+        tar_throttle_timer = nil
+      end
+      pending_tar_progress = nil
+    else
+      -- Less than 3 seconds, queue for later
+      pending_tar_progress = progress_data
+      -- Clear existing timer
+      if tar_throttle_timer then
+        vim.fn.timer_stop(tar_throttle_timer)
+      end
+      -- Set timer to report after remaining time
+      local remaining_time = math.ceil((3.0 - elapsed) * 1000)
+      tar_throttle_timer = vim.fn.timer_start(remaining_time, function()
+        if pending_tar_progress and progress_callback then
+          if pending_tar_progress.progress and pending_tar_progress.progress >= tar_max_progress_shown then
+            progress_callback(pending_tar_progress)
+            tar_max_progress_shown = math.max(tar_max_progress_shown, pending_tar_progress.progress)
+            last_tar_update_time = vim.fn.reltime()
+          end
+        end
+        pending_tar_progress = nil
+      end)
+    end
+  end
 
   local job_id = vim.fn.jobstart(tar_cmd, {
     env = vim.fn.environ(),
@@ -440,10 +755,11 @@ local function extract_tar_gz_async(archive_path, extract_dir, progress_callback
             if use_pv then
               -- Parse pv output: percentage (format: "100%")
               local percent = line:match("(%d+)%%")
-              if percent and progress_callback then
+              if percent then
                 local progress = tonumber(percent) or 0
-                if progress ~= last_progress then
-                  progress_callback({
+                -- Only report if progress increased
+                if progress > last_progress then
+                  report_tar_progress({
                     progress = progress,
                     message = string.format("Extracting backend... %d%%", progress),
                   })
@@ -452,13 +768,13 @@ local function extract_tar_gz_async(archive_path, extract_dir, progress_callback
               end
             else
               -- Parse tar verbose output - show file being extracted
-              if line:match("^x ") and progress_callback then
+              if line:match("^x ") then
                 -- Extract filename from "x path/to/file"
                 local filename = line:match("^x (.+)$")
                 if filename then
-                  -- Show progress with current file
+                  -- Show progress with current file (throttled)
                   local short_name = filename:match("([^/]+)$") or filename
-                  progress_callback({
+                  report_tar_progress({
                     progress = nil,
                     message = string.format("Extracting backend... %s", short_name),
                   })
@@ -471,19 +787,22 @@ local function extract_tar_gz_async(archive_path, extract_dir, progress_callback
     end),
     on_stderr = vim.schedule_wrap(function(_, data, _)
       -- tar sends verbose output to stderr
-      if data and #data > 0 and not use_pv then
-        for _, line in ipairs(data) do
-          if line ~= "" and progress_callback then
-            -- Show generic progress
-            progress_callback({
-              progress = nil,
-              message = "Extracting backend...",
-            })
-          end
-        end
-      end
+      -- We don't report progress from stderr to avoid spam
     end),
     on_exit = vim.schedule_wrap(function(_, exit_code, _)
+      -- Stop any pending throttle timers
+      if tar_throttle_timer then
+        vim.fn.timer_stop(tar_throttle_timer)
+        tar_throttle_timer = nil
+      end
+      if file_progress_timer then
+        vim.fn.timer_stop(file_progress_timer)
+        file_progress_timer = nil
+      end
+      -- Don't flush pending progress - it might be stale
+      pending_tar_progress = nil
+      pending_file_progress = nil
+
       if exit_code ~= 0 then
         Logger.error("Failed to extract tar.gz archive with exit code: " .. tostring(exit_code))
         if callback then
@@ -492,8 +811,10 @@ local function extract_tar_gz_async(archive_path, extract_dir, progress_callback
         return
       end
 
-      if progress_callback then
+      -- Report completion only if we haven't already reported 100%
+      if progress_callback and tar_max_progress_shown < 100 then
         progress_callback({ progress = 100, message = "Extraction completed!" })
+        tar_max_progress_shown = 100
       end
       if callback then
         callback(true)
@@ -630,6 +951,9 @@ M.install = function(version, callback)
   -- Download to temporary archive file
   local archive_path = join_paths(bin_dir, release_archive_name)
 
+  -- Start timing from the beginning of download
+  local start_time = vim.fn.reltime()
+
   download_file_async(url, archive_path, function(progress)
     -- Show progress updates for download
     if progress.progress then
@@ -647,6 +971,20 @@ M.install = function(version, callback)
         Logger.notify(progress.message, Logger.LoggerLogLevels.info)
       end
     end, function(success)
+      -- Calculate total elapsed time
+      local elapsed = vim.fn.reltime(start_time)
+      local elapsed_seconds = vim.fn.reltimefloat(elapsed)
+      local minutes = math.floor(elapsed_seconds / 60)
+      local seconds = math.floor(elapsed_seconds % 60)
+      local milliseconds = math.floor((elapsed_seconds % 1) * 1000)
+
+      local time_str
+      if minutes > 0 then
+        time_str = string.format("%dm %d.%03ds", minutes, seconds, milliseconds)
+      else
+        time_str = string.format("%d.%03ds", seconds, milliseconds)
+      end
+
       -- Clean up archive file
       if vim.fn.filereadable(archive_path) == 1 then
         vim.fn.delete(archive_path)
@@ -654,7 +992,10 @@ M.install = function(version, callback)
 
       if success then
         set_installed_version(version)
-        Logger.notify("Backend installed successfully!", Logger.LoggerLogLevels.info)
+        Logger.notify(
+          string.format("Backend installed successfully! (Total time: %s)", time_str),
+          Logger.LoggerLogLevels.info
+        )
         if callback then
           callback()
         end
