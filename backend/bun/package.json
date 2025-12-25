@@ -8,5 +8,11 @@
     "format": "prettier --write .",
     "prepublishOnly": "npm run build && npm run lint"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "chromium-bidi": "12.0.1",
+    "electron": "39.2.7",
+    "handlebars": "4.7.8",
+    "playwright-core": "1.57.0"
+  }
 }

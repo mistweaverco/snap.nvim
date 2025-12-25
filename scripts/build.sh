@@ -102,19 +102,51 @@ cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
 rm -rf ./*
 cd .. || { echo " ❌ Failed to change to root directory.";echo;exit 1; }
 
-if [[ ! -d "node_modules" ]]; then
-  echo " 📦 Installing dependencies..."
-  echo
-  bun install --frozen-lockfile
-else
-  echo " ✅ Dependencies already installed."
-  echo
+echo " 📦 Installing dependencies..."
+
+cd backend/bun || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
+bun install --frozen-lockfile || { echo " ❌ Failed to install dependencies.";echo;exit 1; }
+cd ../.. || { echo " ❌ Failed to change to root directory.";echo;exit 1; }
+
+  # Places binaries in dist/.local-browsers
+export PLAYWRIGHT_BROWSERS_PATH=./dist/.local-browsers
+bunx playwright install chromium --only-shell
+
+CURRENT_CHROMIUM_LOCALES_DIR=$(find ./dist/.local-browsers -type d -iname 'locales')
+CURRENT_CHROMIUM_DIR=$(dirname "$CURRENT_CHROMIUM_LOCALES_DIR")
+CURRENT_CHROMIUM_VERSION=$(basename "$CURRENT_CHROMIUM_DIR")
+
+if [ -z "$CURRENT_CHROMIUM_DIR" ] || [ ! -d "$CURRENT_CHROMIUM_DIR" ]; then
+  echo " ❌ Failed to locate Chromium directory in Playwright browsers."
+  exit 1
 fi
 
 echo " 🔨 Building for backend: $BACKEND $BACKEND_ICON, platform: $PLATFORM $PLATFORM_ICON"
 echo
 
-bun build --cwd ./backend/bun --compile --target="bun-$BUILD_TARGET" ./src/index.ts --outfile "../../dist/snap-nvim-${PLATFORM_NAME}${BIN_EXT}" || { echo " ❌ Build failed.";echo;exit 1; }
+BINARY_NAME="snap-nvim-${PLATFORM_NAME}${BIN_EXT}"
+
+# Build the main executable
+# Note: playwright-core cannot be bundled into the executable due to dynamic imports
+# It will be loaded at runtime via dynamic import from node_modules
+bun build --cwd ./backend/bun --compile --target="bun-$BUILD_TARGET" ./src/index.ts --outfile "../../dist/$BINARY_NAME" || { echo " ❌ Build failed.";echo;exit 1; }
+
+# Copy playwright-core to dist for runtime loading
+# playwright-core cannot be bundled, so we copy it as-is
+# TODO: check if this is necessary for bun or if we can bundle it
+
+# echo " 📦 Copying playwright-core for runtime..."
+# echo
+# mkdir -p "dist/node_modules"
+# if [ -d "backend/bun/node_modules/playwright-core" ]; then
+#   cp -R --dereference "backend/bun/node_modules/playwright-core" "dist/node_modules/" || {
+#     echo " ⚠️  Warning: Failed to copy playwright-core to dist"
+#   }
+#   echo " ✅ Copied playwright-core to dist/node_modules/"
+# else
+#   echo " ⚠️  Warning: playwright-core not found in node_modules, make sure dependencies are installed"
+# fi
+# echo
 
 if [ "$CI" == false ]; then
   echo " ✅ Build completed successfully in non CI ☁️ environment."
@@ -122,46 +154,22 @@ if [ "$CI" == false ]; then
   exit 0
 fi
 
-echo " 🧹 Removing unused locales..."
+if [ -z "$CURRENT_CHROMIUM_DIR" ] || [ ! -d "$CURRENT_CHROMIUM_DIR" ]; then
+  echo " ❌ Failed to locate Chromium directory in Playwright browsers."
+  exit 1
+fi
+
+echo " 🧹 Removing unused locales from Playwright ..."
 echo
+
 # Find and remove unused locale files, but keep en-US.pak and required files
-# Use a loop to handle multiple chromium directories
-for chromium_dir in ~/.cache/ms-playwright/chromium_headless_shell*; do
-  if [ -d "$chromium_dir" ]; then
-    find "$chromium_dir" -path "*locales*" -type f ! -name "en-US.pak" -delete || true
-  fi
-done
+find "$CURRENT_CHROMIUM_LOCALES_DIR" -type f ! -name "en-US.pak" -delete || true
 
-# Ensure required files are kept
-# icudtl.dat, chrome_100_percent.pak, chrome_200_percent.pak are kept automatically
-
-echo " 📦 Bundling Playwright..."
+# Create playwright directory and copy contents (not the directory itself)
+mkdir -p "dist/playwright"
+cp -R "$CURRENT_CHROMIUM_DIR"/* "dist/playwright/" || { echo " ❌ Failed to copy Playwright.";echo;exit 1; }
+echo " ✅ Bundled Chromium version: $CURRENT_CHROMIUM_VERSION"
 echo
-
-# Copy only the latest playwright chromium version to dist
-PLAYWRIGHT_FOUND=false
-
-# Path differs on windows vs unix systems
-if [[ "$PLATFORM" == windows* ]]; then
-  LATEST_CHROMIUM_DIR=$(ls -1d ~/.cache/ms-playwright/chromium_headless_shell*/ 2>/dev/null | sort -V | tail -1)
-else
-  LATEST_CHROMIUM_DIR=$(ls -1d ~/.cache/ms-playwright/chromium_headless_shell*/chrome-headless-shell*/ 2>/dev/null | sort -V | tail -1)
-fi
-
-if [ -n "$LATEST_CHROMIUM_DIR" ] && [ -d "$LATEST_CHROMIUM_DIR" ]; then
-  # Extract just the directory name (e.g., chromium-1200)
-  CHROMIUM_VERSION=$(basename "$LATEST_CHROMIUM_DIR")
-  # Create playwright directory and copy contents (not the directory itself)
-  mkdir -p "dist/playwright"
-  cp -R "$LATEST_CHROMIUM_DIR"/* "dist/playwright/" || { echo " ❌ Failed to copy Playwright.";echo;exit 1; }
-  PLAYWRIGHT_FOUND=true
-  echo " ✅ Bundled Chromium version: $CHROMIUM_VERSION"
-  echo
-fi
-
-if [ "$PLAYWRIGHT_FOUND" = false ]; then
-  echo " ⚠️  Warning: Playwright cache not found, skipping bundling"
-fi
 
 echo " 📦 Creating release archive..."
 echo
@@ -236,30 +244,40 @@ create_zip() {
 }
 
 # Create archive based on platform
+# Include playwright-core node_modules if it exists
+ARCHIVE_FILES=("$BINARY_NAME")
+if [ -d "dist/playwright" ]; then
+  ARCHIVE_FILES+=("playwright")
+fi
+if [ -d "dist/node_modules" ]; then
+  ARCHIVE_FILES+=("node_modules")
+fi
+
 case "$PLATFORM" in
   "windows-x86_64")
     ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.zip"
     cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
-    if [ -d "playwright" ]; then
-      # Remove trailing slash for consistent behavior
-      create_zip "$ARCHIVE_NAME" "$BINARY_NAME" "playwright" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
-    else
-      create_zip "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
-    fi
+    create_zip "$ARCHIVE_NAME" "${ARCHIVE_FILES[@]}" || { echo " ❌ Failed to create zip archive.";echo;exit 1; }
     cd ..
     ;;
   *)
     ARCHIVE_NAME="snap-nvim-${PLATFORM_NAME}.tar.gz"
     cd dist || { echo " ❌ Failed to change to dist directory.";echo;exit 1; }
-    if [ -d "playwright" ]; then
-      # Archive with relative paths (no trailing slash on playwright to ensure consistent behavior)
-      tar --use-compress-program='gzip -9' -cf "$ARCHIVE_NAME" "$BINARY_NAME" playwright || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
-    else
-      tar --use-compress-program='gzip -9' -cf "$ARCHIVE_NAME" "$BINARY_NAME" || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
-    fi
+    tar --use-compress-program='gzip -9' -cf "$ARCHIVE_NAME" "${ARCHIVE_FILES[@]}" || { echo " ❌ Failed to create tar.gz archive.";echo;exit 1; }
     cd ..
     ;;
 esac
 
 echo " ✅ Build completed successfully in CI ☁️ environment."
 echo " 📦 Archive created: dist/$ARCHIVE_NAME"
+echo
+
+echo " 🧹 Cleaning up temporary files..."
+echo
+# Remove copied playwright and node_modules to keep dist clean
+rm -rf "$PLAYWRIGHT_BROWSERS_PATH" \
+  "./dist/playwright" \
+  "./dist/.local-browsers" \
+  "./dist/$BINARY_NAME"
+echo " ✅ Cleanup completed."
+echo

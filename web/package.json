@@ -2,5 +2,17 @@
   "name": "web",
   "private": true,
   "version": "0.0.1",
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@tailwindcss/vite": "4.0.13",
+    "daisyui": "5.0.2",
+    "mdsvex": "0.12.6",
+    "rehype-autolink-headings": "7.1.0",
+    "rehype-slug-custom-id": "2.0.0",
+    "svelte": "5.41.4",
+    "svelte-check": "4.3.3",
+    "svelte-eslint-parser": "1.4.1",
+    "svelte-sitemap": "2.7.1",
+    "tailwindcss": "4.0.13"
+  }
 }
