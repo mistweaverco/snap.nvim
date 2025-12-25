@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "prepare": "bun run --cwd web svelte-kit sync || echo ''",
-    "postinstall": "bunx simple-git-hooks",
+    "postinstall": "bunx simple-git-hooks && bunx playwright install chromium --only-shell",
     "format": "eslint --fix . && prettier -w .",
     "web:dev": "bun run --cwd web vite dev",
     "web:build": "bun run --cwd web vite build"
@@ -37,7 +37,6 @@
     "install": "0.13.0",
     "jiti": "2.6.1",
     "mdsvex": "0.12.6",
-    "playwright": "1.57.0",
     "playwright-core": "1.57.0",
     "prettier": "3.7.4",
     "prettier-plugin-svelte": "3.4.1",
