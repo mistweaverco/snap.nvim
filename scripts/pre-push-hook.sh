@@ -13,7 +13,7 @@ VALIDATE_SCRIPT="$PROJECT_ROOT/scripts/validate-version.sh"
 while read local_ref local_oid remote_ref remote_oid; do
   # Check if this is a tag reference
   if [[ "$local_ref" =~ ^refs/tags/ ]]; then
-
+    tag_name="${local_ref#refs/tags/}"
 
     # Validate that versions match before allowing tag push
     if [[ -f "$VALIDATE_SCRIPT" ]]; then
@@ -49,4 +49,3 @@ while read local_ref local_oid remote_ref remote_oid; do
 done
 
 exit 0
-
