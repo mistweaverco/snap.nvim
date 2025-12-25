@@ -1,0 +1,4 @@
+{
+  "pre-push": "./scripts/pre-push-hook.sh"
+}
+

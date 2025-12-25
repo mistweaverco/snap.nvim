@@ -8,24 +8,23 @@ local M = {}
 
 local BACKEND_BIN_PATH = Backend.get_bin_path()
 
----Check if Puppeteer is installed by calling the backend health endpoint
+---Check if Playwright browser is available by calling the backend health endpoint
 ---@param callback function|nil Callback function called with result: {isInstalled: boolean, executablePath: string|nil}
 local function check_backend_health(callback)
   local conf = Config.get()
   local system_args = { BACKEND_BIN_PATH, "health" }
   local cwd = nil
 
-  if conf.debug ~= nil then
-    if conf.debug.backend then
-      local backend_bin_path = vim.fn.exepath(conf.debug.backend)
+  if conf.development_mode ~= nil then
+    if conf.development_mode.backend then
+      local backend_bin_path = vim.fn.exepath(conf.development_mode.backend)
       if backend_bin_path == "" then
-        error(conf.debug.backend .. " executable not found in PATH")
+        error(conf.development_mode.backend .. " executable not found in PATH")
       end
-      cwd = payload.get_absolute_plugin_path("backend", conf.debug.backend)
+      cwd = payload.get_absolute_plugin_path("backend", conf.development_mode.backend)
       if not vim.fn.isdirectory(cwd) then
         error("Backend directory not found: " .. cwd)
       end
-      Logger.debug("Using debug backend at: " .. backend_bin_path .. " with cwd: " .. cwd)
       system_args = { backend_bin_path, "run", "src/index.ts", "health" }
     end
   end
@@ -73,7 +72,7 @@ local function check_backend_health(callback)
   )
 end
 
----Install Puppeteer by calling the backend install endpoint
+---Install/verify Playwright browser by calling the backend install endpoint
 ---@param progress_callback function|nil Callback function called with progress updates: {status: string, message: string, progress: number|nil}
 ---@param completion_callback function|nil Callback function called when installation completes: {success: boolean, executablePath: string|nil}
 local function install_backend(progress_callback, completion_callback)
@@ -81,17 +80,16 @@ local function install_backend(progress_callback, completion_callback)
   local system_args = { BACKEND_BIN_PATH, "install" }
   local cwd = nil
 
-  if conf.debug ~= nil then
-    if conf.debug.backend then
-      local backend_bin_path = vim.fn.exepath(conf.debug.backend)
+  if conf.development_mode ~= nil then
+    if conf.development_mode.backend then
+      local backend_bin_path = vim.fn.exepath(conf.development_mode.backend)
       if backend_bin_path == "" then
-        error(conf.debug.backend .. " executable not found in PATH")
+        error(conf.development_mode.backend .. " executable not found in PATH")
       end
-      cwd = payload.get_absolute_plugin_path("backend", conf.debug.backend)
+      cwd = payload.get_absolute_plugin_path("backend", conf.development_mode.backend)
       if not vim.fn.isdirectory(cwd) then
         error("Backend directory not found: " .. cwd)
       end
-      Logger.debug("Using debug backend at: " .. backend_bin_path .. " with cwd: " .. cwd)
       -- Use src/index.ts explicitly to ensure command line arguments are passed correctly
       system_args = { backend_bin_path, "run", "src/index.ts", "install" }
     end
@@ -228,25 +226,19 @@ local function run_backend_export(opts, export_type, success_message)
         return
       end
 
-      -- Debug: Log that callback was invoked
-      if conf.debug then
-        Logger.debug("Payload callback invoked with " .. #(jsonPayload.data.code or {}) .. " lines")
-      end
-
       local system_args = { BACKEND_BIN_PATH }
       local cwd = nil
 
-      if conf.debug ~= nil then
-        if conf.debug.backend then
-          local backend_bin_path = vim.fn.exepath(conf.debug.backend)
+      if conf.development_mode ~= nil then
+        if conf.development_mode.backend then
+          local backend_bin_path = vim.fn.exepath(conf.development_mode.backend)
           if backend_bin_path == "" then
-            error(conf.debug.backend .. " executable not found in PATH")
+            error(conf.development_mode.backend .. " executable not found in PATH")
           end
-          cwd = payload.get_absolute_plugin_path("backend", conf.debug.backend)
+          cwd = payload.get_absolute_plugin_path("backend", conf.development_mode.backend)
           if not vim.fn.isdirectory(cwd) then
             error("Backend directory not found: " .. cwd)
           end
-          Logger.debug("Using debug backend at: " .. backend_bin_path .. " with cwd: " .. cwd)
           system_args = { backend_bin_path, "run", "." }
         end
       end
@@ -300,11 +292,11 @@ local function run_backend_export(opts, export_type, success_message)
     end)
   end
 
-  -- First, check if Puppeteer is installed
+  -- First, check if Playwright browser is available
   check_backend_health(function(health_result)
     if not health_result.isInstalled then
-      -- Puppeteer is not installed, install it first
-      Logger.notify("Puppeteer browser not found. Installing...", Logger.LoggerLogLevels.info)
+      -- Browser is not available, resolve it first
+      Logger.notify("Browser not found. Resolving...", Logger.LoggerLogLevels.info)
       install_backend(function(progress)
         -- Show progress updates
         if progress.status == "resolving" or progress.status == "installing" then
@@ -324,7 +316,7 @@ local function run_backend_export(opts, export_type, success_message)
         end
       end)
     else
-      -- Puppeteer is installed, proceed with normal export flow
+      -- Browser is available, proceed with normal export flow
       proceed_with_export()
     end
   end)

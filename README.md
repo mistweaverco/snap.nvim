@@ -1,13 +1,17 @@
 <div align="center">
 
-![Snap.nvim Logo](assets/logo.svg)
+![Snap.nvim Logo][logo]
 
 # Snap.nvim
 
-![Lua](https://img.shields.io/badge/Made%20with%20Lua-blueviolet.svg?style=for-the-badge&logo=lua)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/mistweaverco/snap.nvim?style=for-the-badge)](https://github.com/mistweaverco/snap.nvim/releases/latest)
+[![Made with love][badge-made-with-love]][contributors]
+![Made with lua][badge-made-with-lua]
+[![Latest release][badge-latest-release]][latest-release]
 
-[What](#what) • [Requirements](#requirements) • [Install](#install) • [Configuration](#configuration)
+[What](#what) •
+[Requirements](#requirements) •
+[Install](#install) •
+[Configuration](#configuration)
 
 <p></p>
 
@@ -37,8 +41,26 @@ capture the entire Neovim window.
 - Neovim 0.11.5+
 - cURL installed on your system
   (for downloading pre-built binaries)
+- Extraction tools for archive extraction:
+  - **Windows**: `unzip` (usually available via Git Bash, WSL, or MSYS2)
+  - **Linux/macOS**: `tar` (typically pre-installed)
 - linux-amd64, macos-amd64, macos-arm64 or windows-amd64 system
   (you need to build from source for other systems)
+
+### Linux dependencies
+
+On Linux systems, the following packages are required for the bundled Chromium browser:
+
+```bash
+# Debian/Ubuntu
+sudo apt install libnss3 libatk-bridge2.0-0 libx11-xcb1
+
+# Fedora/RHEL
+sudo dnf install nss atk at-spi2-atk libxkbcommon
+
+# Arch Linux
+sudo pacman -S nss atk at-spi2-atk libxkbcommon
+```
 
 ## Install
 
@@ -55,7 +77,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.3.1',
+  version = 'v1.4.0',
   ---@type SnapUserConfig
   opts = {}
 },
@@ -71,7 +93,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/snap.nvim',
-  tag = 'v1.3.1',
+  tag = 'v1.4.0',
   config = function()
 
     ---@type SnapUserConfig
@@ -90,7 +112,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/snap.nvim.git',
-  version = 'v1.3.1',
+  version = 'v1.4.0',
 })
 ---@type SnapUserConfig
 local cfg = {}
@@ -222,7 +244,7 @@ This would then translate to the following `font_settings`:
 ```lua
 return {
   "mistweaverco/snap.nvim",
-  version = "v1.3.1",
+  version = 'v1.4.0',
   ---@type SnapUserConfig
   opts = {
     template = "linux",
@@ -310,7 +332,26 @@ Optional. Defaults to:
 }
 ```
 
-### Configure `debug`
+### Configure `log_level`
+
+Optional. Defaults to `"error"`.
+
+Log level for debugging. Controls which log messages are displayed.
+
+Valid options are:
+
+- `"trace"` - Most verbose, shows all log messages
+- `"debug"` - Shows debug, info, warn, and error messages
+- `"info"` - Shows info, warn, and error messages
+- `"warn"` - Shows warn and error messages
+- `"error"` - Shows only error messages (default)
+- `"off"` - Disables all logging
+
+```lua
+log_level = "error",  -- Log level for debugging
+```
+
+### Configure `development_mode`
 
 Optional. Defaults to `nil`.
 
@@ -323,8 +364,7 @@ by running `bun install` in the plugin directory.
 
 ```lua
 {
-  backend = "bun",         -- Debug backend to use (currently only "bun" is supported)
-  log_level = "info",      -- Log level for debugging (e.g., "info", "debug", "error")
+  backend = "bun",  -- Development mode backend to use (currently only "bun" is supported)
 }
 ```
 
@@ -333,9 +373,10 @@ by running `bun install` in the plugin directory.
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.3.1',
+  version = 'v1.4.0',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
+    log_level = "error", -- Log level for debugging (e.g., "trace", "debug", "info", "warn", "error", "off")
     template = "default", -- Template to use for rendering screenshots ("default", "macos", "linux")
     template_filepath = nil, -- Absolute path to a custom handlebars template file (optional), overrides 'template' option
     -- Additional data to pass to the your custom handlebars template (optional)
@@ -382,17 +423,15 @@ by running `bun install` in the plugin directory.
         -- so you can view it correctly in E-mails or browsers
       },
     },
-  },
-  -- defaults to nil
-  -- if set, no pre-compiled binaries will be downloaded
-  -- and the plugin will attempt to run directly from source
-  debug = {
-    backend = "bun",         -- Debug backend to use (currently only "bun" is supported)
-    log_level = "info",      -- Log level for debugging (e.g., "info", "debug", "error")
+    -- defaults to nil
+    -- if set, no pre-compiled binaries will be downloaded
+    -- and the plugin will attempt to run directly from source
+    development_mode = {
+      backend = "bun",  -- Development mode backend to use (currently only "bun" is supported)
+    },
   },
 },
 ```
-
 
 ## Commands
 
@@ -428,3 +467,12 @@ Usage: `:Snap html`
 
 Save a screenshot of the current file or visual selection as an HTML file and
 copy the HTML representation to the clipboard.
+
+
+
+[badge-made-with-lua]: assets/badge-made-with-lua.svg
+[badge-made-with-love]: assets/badge-made-with-love.svg
+[contributors]: https://github.com/mistweaverco/snap.nvim/graphs/contributors
+[logo]: assets/logo.svg
+[badge-latest-release]: https://img.shields.io/github/v/release/mistweaverco/snap.nvim?style=for-the-badge
+[latest-release]: https://github.com/mistweaverco/snap.nvim/releases/latest

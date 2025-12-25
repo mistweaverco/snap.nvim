@@ -66,7 +66,8 @@ M.SnapConfigFontSettingsFont = {
 ---User configuration for the screenshot plugin, extending SnapConfig
 ---@class SnapUserConfig
 ---@field user_command string|nil Name of the user command to take screenshots, defaults to "Snap"
----@field debug SnapConfigDebug|nil Debug configuration
+---@field log_level string|nil Log level for debugging (e.g., "trace", "debug", "info", "warn", "error", "off"), defaults to "error"
+---@field development_mode SnapConfigDevelopmentMode|nil Development mode configuration
 ---@field template SnapConfigTemplate|nil Built-in template name or "default"
 ---@field templateFilepath string|nil Absolute path to a custom HTML template file (optional)
 ---@field additional_template_data table|nil Table of additional data to pass to the template (optional)
@@ -131,10 +132,9 @@ M.SnapConfigFontSettingsFont = {
 ---@field line_height number Default line height for the screenshot
 ---@field fonts table<SnapConfigFontSettingsFont, SnapConfigFontSetting> Font settings for different styles
 
----SnapConfigDebug configuration for debugging the screenshot plugin
----@class SnapConfigDebug
----@field backend SnapConfigBackend Screenshot backend to debug
----@field log_level string Log level for debugging (e.g., "info", "debug", "warn", "error")
+---SnapConfigDevelopmentMode configuration for development mode
+---@class SnapConfigDevelopmentMode
+---@field backend SnapConfigBackend Screenshot backend to use in development mode
 
 ---SnapConfigCopyToClipboard configuration for copy to clipboard settings
 ---@class SnapConfigCopyToClipboard
@@ -144,7 +144,8 @@ M.SnapConfigFontSettingsFont = {
 ---Default configuration for the screenshot plugin
 ---@class SnapConfig
 ---@field user_command string Name of the user command to take screenshots, defaults to "Snap"
----@field debug SnapConfigDebug|nil Debug configuration
+---@field log_level string Log level for debugging (e.g., "trace", "debug", "info", "warn", "error", "off"), defaults to "error"
+---@field development_mode SnapConfigDevelopmentMode|nil Development mode configuration
 ---@field templateFilepath string|nil Absolute path to a custom HTML template file (optional)
 ---@field additional_template_data table|nil Table of additional data to pass to the template (optional)
 ---@field output_dir string|nil Output directory for screenshots (defaults to $HOME/Pictures/Screenshots if nil)
