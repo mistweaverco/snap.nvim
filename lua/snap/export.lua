@@ -98,6 +98,41 @@ local function install_backend(progress_callback, completion_callback)
   -- Use jobstart for real-time output streaming
   local final_result = nil
   local stdout_buffer = ""
+  local last_progress_status = nil
+  local last_progress_value = nil
+  local progress_100_reported = false
+  local debounce_timer = nil
+  local pending_progress = nil
+
+  -- Debounced progress callback to prevent rapid updates
+  local function report_progress(progress_data)
+    pending_progress = progress_data
+    -- Clear existing timer
+    if debounce_timer then
+      vim.fn.timer_stop(debounce_timer)
+    end
+    -- Set new timer to report after 150ms
+    debounce_timer = vim.fn.timer_start(150, function()
+      if pending_progress and progress_callback then
+        -- Only report 100% or "completed" once
+        if (pending_progress.progress == 100 or pending_progress.status == "completed") then
+          if not progress_100_reported then
+            progress_callback(pending_progress)
+            progress_100_reported = true
+          end
+        else
+          -- Only report if status or progress value changed
+          if pending_progress.status ~= last_progress_status or
+            (pending_progress.progress and pending_progress.progress ~= last_progress_value) then
+            progress_callback(pending_progress)
+            last_progress_status = pending_progress.status
+            last_progress_value = pending_progress.progress
+          end
+        end
+        pending_progress = nil
+      end
+    end)
+  end
 
   local job_id = vim.fn.jobstart(system_args, {
     cwd = cwd,
@@ -124,8 +159,16 @@ local function install_backend(progress_callback, completion_callback)
             if res.data and res.data.type == "install" then
               if res.data.status == "completed" then
                 final_result = res
+                -- Report completion only once
+                if not progress_100_reported and progress_callback then
+                  report_progress({
+                    status = res.data.status,
+                    message = res.data.message,
+                    progress = res.data.progress or 100,
+                  })
+                end
               elseif progress_callback then
-                progress_callback({
+                report_progress({
                   status = res.data.status,
                   message = res.data.message,
                   progress = res.data.progress,
@@ -145,6 +188,22 @@ local function install_backend(progress_callback, completion_callback)
       end
     end),
     on_exit = vim.schedule_wrap(function(_, exit_code, _)
+      -- Stop any pending debounce timer
+      if debounce_timer then
+        vim.fn.timer_stop(debounce_timer)
+        debounce_timer = nil
+      end
+      -- Flush any pending progress immediately
+      if pending_progress and progress_callback then
+        if not (pending_progress.progress == 100 or pending_progress.status == "completed") or not progress_100_reported then
+          progress_callback(pending_progress)
+          if pending_progress.progress == 100 or pending_progress.status == "completed" then
+            progress_100_reported = true
+          end
+        end
+        pending_progress = nil
+      end
+
       if exit_code ~= 0 then
         Logger.error("Install failed with exit code: " .. tostring(exit_code))
         if completion_callback then
