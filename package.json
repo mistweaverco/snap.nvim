@@ -7,8 +7,7 @@
     "backend/bun"
   ],
   "scripts": {
-    "postinstall": "bunx playwright install chromium",
-    "prepare": "simple-git-hooks",
+    "postinstall": "bunx playwright install chromium && simple-git-hooks",
     "format": "bunx -- prettier -w **/*.md *.json *.js *.yaml"
   },
   "devDependencies": {
