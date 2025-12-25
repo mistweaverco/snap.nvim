@@ -96,13 +96,13 @@ end
 ---@param progress_callback function|nil Optional callback for progress updates: {progress: number, message: string}
 ---@param callback function|nil Optional callback to run after download completes
 local function download_file_async(url, output_path, progress_callback, callback)
-  -- Use curl with progress bar that outputs to stderr
+  -- Use curl with simple progress bar (#) that outputs to stderr
   -- Format: %{url_effective}\n%{size_download}\n%{size_total}\n%{speed_download}\n%{time_total}
   -- We'll parse this to show percentage
   local cmd = {
     "curl",
     "-fL",
-    "--progress-bar",
+    "-#", -- Simple progress bar (easier to parse than --progress-bar)
     "--write-out",
     "%{url_effective}\n%{size_download}\n%{size_total}\n%{speed_download}\n%{time_total}\n",
     "-o",
@@ -110,13 +110,14 @@ local function download_file_async(url, output_path, progress_callback, callback
     url,
   }
 
-  local stderr_buffer = ""
   local last_progress = 0
+  local download_completed = false
+  local final_stats = nil
 
   local job_id = vim.fn.jobstart(cmd, {
     env = vim.fn.environ(),
     on_stdout = vim.schedule_wrap(function(_, data, _)
-      -- Parse the write-out data from stdout
+      -- Parse the write-out data from stdout (only available at the end)
       if data and #data > 0 then
         local lines = {}
         for _, line in ipairs(data) do
@@ -128,40 +129,46 @@ local function download_file_async(url, output_path, progress_callback, callback
           local size_download = tonumber(lines[2]) or 0
           local size_total = tonumber(lines[3]) or 0
           local speed = tonumber(lines[4]) or 0
-          local time_total = tonumber(lines[5]) or 0
 
-          if size_total > 0 then
+          -- Store final stats for use in on_exit
+          final_stats = {
+            size_download = size_download,
+            size_total = size_total,
+            speed = speed,
+          }
+
+          -- Only report if we haven't completed yet and have valid data
+          if size_total > 0 and progress_callback and not download_completed then
             local progress = math.floor((size_download / size_total) * 100)
-            if progress ~= last_progress and progress_callback then
+            if progress ~= last_progress then
               local speed_mb = speed / 1024 / 1024
               local message = string.format("Downloading backend... %d%% (%.2f MB/s)", progress, speed_mb)
               progress_callback({ progress = progress, message = message })
               last_progress = progress
+              if progress >= 100 then
+                download_completed = true
+              end
             end
-          elseif size_download > 0 and progress_callback then
-            -- Total size unknown, show downloaded size
-            local downloaded_mb = size_download / 1024 / 1024
-            local message = string.format("Downloading backend... %.2f MB", downloaded_mb)
-            progress_callback({ progress = nil, message = message })
           end
         end
       end
     end),
     on_stderr = vim.schedule_wrap(function(_, data, _)
-      -- curl progress bar goes to stderr, parse it for visual feedback
-      if data and #data > 0 then
+      -- Parse curl's -# progress bar from stderr for real-time updates
+      -- Format: "##..." where each # represents ~2% progress (50 # = 100%)
+      if data and #data > 0 and progress_callback and not download_completed then
         for _, line in ipairs(data) do
           if line ~= "" then
-            stderr_buffer = stderr_buffer .. line
-            -- Parse curl progress: # characters indicate progress
+            -- Count # characters in the line
             local hash_count = 0
-            for char in line:gmatch("#") do
+            for _ in line:gmatch("#") do
               hash_count = hash_count + 1
             end
-            -- curl progress bar is 50 characters wide, so we can estimate progress
-            if hash_count > 0 and progress_callback then
+            -- Simple progress bar has ~50 # characters for 100%
+            if hash_count > 0 then
               local estimated_progress = math.min(100, math.floor((hash_count / 50) * 100))
-              if estimated_progress ~= last_progress then
+              -- Only update if progress changed and we haven't completed
+              if estimated_progress ~= last_progress and estimated_progress < 100 then
                 progress_callback({
                   progress = estimated_progress,
                   message = string.format("Downloading backend... %d%%", estimated_progress),
@@ -193,8 +200,14 @@ local function download_file_async(url, output_path, progress_callback, callback
       end
       f:close()
       make_executable(output_path)
-      if progress_callback then
-        progress_callback({ progress = 100, message = "Download completed!" })
+      -- Report completion only if we haven't already reported 100%
+      if progress_callback and not download_completed then
+        if final_stats and final_stats.size_total > 0 then
+          local speed_mb = (final_stats.speed or 0) / 1024 / 1024
+          progress_callback({ progress = 100, message = string.format("Download completed! (%.2f MB/s)", speed_mb) })
+        else
+          progress_callback({ progress = 100, message = "Download completed!" })
+        end
       end
       Logger.notify("Snap.nvim backend downloaded successfully!", Logger.LoggerLogLevels.info)
       if callback then

@@ -114,7 +114,7 @@ fi
 echo " 🔨 Building for backend: $BACKEND $BACKEND_ICON, platform: $PLATFORM $PLATFORM_ICON"
 echo
 
-bun build --cwd ./backend/bun --compile --target="bun-$BUILD_TARGET" --external electron ./src/index.ts --outfile "../../dist/snap-nvim-${PLATFORM_NAME}${BIN_EXT}" || { echo " ❌ Build failed.";echo;exit 1; }
+bun build --cwd ./backend/bun --compile --target="bun-$BUILD_TARGET" ./src/index.ts --outfile "../../dist/snap-nvim-${PLATFORM_NAME}${BIN_EXT}" || { echo " ❌ Build failed.";echo;exit 1; }
 
 if [ "$CI" == false ]; then
   echo " ✅ Build completed successfully in non CI ☁️ environment."
@@ -140,7 +140,13 @@ echo
 
 # Copy only the latest playwright chromium version to dist
 PLAYWRIGHT_FOUND=false
-LATEST_CHROMIUM_DIR=$(ls -1d ~/.cache/ms-playwright/chromium_headless_shell*/chrome-headless-shell*/ 2>/dev/null | sort -V | tail -1)
+
+# Path differs on windows vs unix systems
+if [[ "$PLATFORM" == windows* ]]; then
+  LATEST_CHROMIUM_DIR=$(ls -1d ~/.cache/ms-playwright/chromium_headless_shell*/ 2>/dev/null | sort -V | tail -1)
+else
+  LATEST_CHROMIUM_DIR=$(ls -1d ~/.cache/ms-playwright/chromium_headless_shell*/chrome-headless-shell*/ 2>/dev/null | sort -V | tail -1)
+fi
 
 if [ -n "$LATEST_CHROMIUM_DIR" ] && [ -d "$LATEST_CHROMIUM_DIR" ]; then
   # Extract just the directory name (e.g., chromium-1200)
