@@ -137,7 +137,7 @@ echo " 📦 Copying playwright-core for runtime..."
 echo
 mkdir -p "dist/node_modules"
 if [ -d "backend/bun/node_modules/playwright-core" ]; then
-  cp -R --dereference "backend/bun/node_modules/playwright-core" "dist/node_modules/" || {
+  cp -R -L "backend/bun/node_modules/playwright-core" "dist/node_modules/" || {
     echo " ⚠️  Warning: Failed to copy playwright-core to dist"
   }
   echo " ✅ Copied playwright-core to dist/node_modules/"
