@@ -90,6 +90,64 @@ local set_installed_version = function(version)
   f:close()
 end
 
+---Create a progress callback handler that uses juu.progress if available, otherwise falls back to Logger.notify
+---@param title string Title for the progress display
+---@return function progress_callback A function that accepts {progress: number|nil, message: string}
+---@return function finish_callback A function to call when progress is complete (optional message)
+local function create_progress_handler(title)
+  title = title or "snap.nvim"
+  local has_juu, juu_progress = pcall(require, "juu.progress")
+  local handle = nil
+
+  if has_juu and juu_progress and juu_progress.handle then
+    -- Create juu progress handle (with error handling)
+    local success, created_handle = pcall(juu_progress.handle.create, {
+      title = title,
+      message = "Starting...",
+      client = { name = title },
+      percentage = 0,
+      cancellable = false,
+    })
+    if success and created_handle then
+      handle = created_handle
+    end
+  end
+
+  local progress_callback = function(progress_data)
+    if handle then
+      -- Use juu.progress
+      local message = progress_data.message or "In progress..."
+      local report_data = { message = message }
+      -- Only include percentage if it's provided (not nil)
+      if progress_data.progress ~= nil then
+        report_data.percentage = progress_data.progress
+      end
+      handle:report(report_data)
+    else
+      -- Fallback to Logger.notify
+      Logger.notify(progress_data.message or "In progress...", Logger.LoggerLogLevels.info)
+    end
+  end
+
+  local finish_callback = function(message)
+    if handle then
+      if message then
+        handle:report({
+          message = message,
+          percentage = 100,
+        })
+      end
+      handle:finish()
+    else
+      if message then
+        Logger.notify(message, Logger.LoggerLogLevels.info)
+      end
+    end
+  end
+
+  return progress_callback, finish_callback
+end
+
 ---Download a file asynchronously with progress display
 ---@param url string URL to download from
 ---@param output_path string Path to save the file to
@@ -1011,16 +1069,14 @@ M.install = function(version, callback)
   -- Start timing from the beginning of download
   local start_time = vim.fn.reltime()
 
-  download_file_async(url, archive_path, function(progress)
-    -- Show progress updates for download
-    if progress.progress then
-      Logger.notify(progress.message, Logger.LoggerLogLevels.info)
-    else
-      Logger.notify(progress.message, Logger.LoggerLogLevels.info)
-    end
-  end, function(download_success)
+  -- Create progress handlers for download and extraction
+  local download_progress, download_finish = create_progress_handler("snap.nvim: Downloading")
+  local extract_progress, extract_finish = create_progress_handler("snap.nvim: Extracting")
+
+  download_file_async(url, archive_path, download_progress, function(download_success)
     -- Only proceed with extraction if download succeeded
     if not download_success then
+      download_finish("Download failed")
       Logger.error("Download failed. Cannot proceed with installation.")
       if callback then
         callback()
@@ -1028,15 +1084,10 @@ M.install = function(version, callback)
       return
     end
 
+    download_finish("Download completed")
+
     -- Extract archive after download with progress
-    extract_and_setup_async(archive_path, bin_dir, function(progress)
-      -- Show progress updates for extraction
-      if progress.progress then
-        Logger.notify(progress.message, Logger.LoggerLogLevels.info)
-      else
-        Logger.notify(progress.message, Logger.LoggerLogLevels.info)
-      end
-    end, function(success)
+    extract_and_setup_async(archive_path, bin_dir, extract_progress, function(success)
       -- Calculate total elapsed time
       local elapsed = vim.fn.reltime(start_time)
       local elapsed_seconds = vim.fn.reltimefloat(elapsed)
@@ -1058,14 +1109,12 @@ M.install = function(version, callback)
 
       if success then
         set_installed_version(version)
-        Logger.notify(
-          string.format("Backend installed successfully! (Total time: %s)", time_str),
-          Logger.LoggerLogLevels.info
-        )
+        extract_finish(string.format("Backend installed successfully! (Total time: %s)", time_str))
         if callback then
           callback()
         end
       else
+        extract_finish("Extraction failed")
         Logger.error("Failed to extract backend archive")
         if callback then
           callback()
