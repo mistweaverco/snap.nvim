@@ -5,6 +5,8 @@
 # Snap.nvim
 
 [![Made with love][badge-made-with-love]][contributors]
+[![Development status][badge-development-status]][development-status]
+[![Our manifesto][badge-our-manifesto]][our-manifesto]
 ![Made with lua][badge-made-with-lua]
 [![Latest release][badge-latest-release]][latest-release]
 
@@ -469,7 +471,11 @@ Save a screenshot of the current file or visual selection as an HTML file and
 copy the HTML representation to the clipboard.
 
 [badge-made-with-lua]: assets/badge-made-with-lua.svg
+[badge-development-status]: assets/badge-development-status.svg
+[badge-our-manifesto]: assets/badge-our-manifesto.svg
 [badge-made-with-love]: assets/badge-made-with-love.svg
+[our-manifesto]: https://mistweaverco.com/manifesto
+[development-status]: https://github.com/orgs/mistweaverco/projects/5/views/1?filterQuery=repo%3Amistweaverco%2Fsnap.nvim
 [contributors]: https://github.com/mistweaverco/snap.nvim/graphs/contributors
 [logo]: assets/logo.svg
 [badge-latest-release]: https://img.shields.io/github/v/release/mistweaverco/snap.nvim?style=for-the-badge
