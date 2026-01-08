@@ -75,6 +75,7 @@ M.SnapConfigFontSettingsFont = {
 ---@field timeout number|nil Timeout for screenshot operations in milliseconds
 ---@field filename_pattern string|nil Screenshot filename pattern (supports %t for timestamp)
 ---@field copy_to_clipboard SnapConfigCopyToClipboard|nil Copy to clipboard settings
+---@field save_to_disk SnapConfigSaveToDisk|nil Whether to save the screenshot to disk
 ---@field notify SnapConfigNotify|nil Notification settings
 ---@field font_settings SnapConfigFontSettings|nil Font settings for the screenshot
 
@@ -141,6 +142,11 @@ M.SnapConfigFontSettingsFont = {
 ---@field image boolean Whether to copy the image to clipboard
 ---@field html boolean Whether to copy the HTML to clipboard
 
+---SnapConfigSaveToDisk configuration for saving to disk settings
+---@class SnapConfigSaveToDisk
+---@field image boolean Whether to save the image to disk
+---@field html boolean Whether to save the HTML to disk
+
 ---Default configuration for the screenshot plugin
 ---@class SnapConfig
 ---@field user_command string Name of the user command to take screenshots, defaults to "Snap"
@@ -153,6 +159,7 @@ M.SnapConfigFontSettingsFont = {
 ---@field template SnapConfigTemplate Built-in template name or "default"
 ---@field filename_pattern string Screenshot filename pattern (supports %t for timestamp)
 ---@field copy_to_clipboard SnapConfigCopyToClipboard Copy to clipboard settings
+---@field save_to_disk SnapConfigSaveToDisk Whether to save the screenshot to disk
 ---@field notify SnapConfigNotify
 ---@field font_settings SnapConfigFontSettings Font settings for the screenshot
 return M

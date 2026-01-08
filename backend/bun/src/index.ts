@@ -106,10 +106,14 @@ const main = async () => {
 
   let bufstr: NodeHTMLToImageBuffer | Buffer | string | null = null;
   let filepath: string = "";
+  let toClipboard: boolean = false;
+  let toDisk: boolean = false;
 
   switch (jsonPayload.data.type) {
     case JSONRequestType.CodeImageGeneration:
       json = jsonPayload as JSONObjectImageSuccessRequest;
+      toClipboard = json.data.toClipboard.image;
+      toDisk = json.data.toDisk.image;
       [bufstr, filepath] = await ImageGenerator(json);
       if (bufstr && json.data.toClipboard.image) {
         Clipboard.write(bufstr, "image/png");
@@ -117,13 +121,17 @@ const main = async () => {
       break;
     case JSONRequestType.CodeHTMLGeneration:
       json = jsonPayload as JSONObjectHTMLSuccessRequest;
-      [bufstr, filepath] = await HTMLGenerator(json, true);
+      toClipboard = json.data.toClipboard.html;
+      toDisk = json.data.toDisk.html;
+      [bufstr, filepath] = await HTMLGenerator(json, json.data.toDisk.html);
       if (bufstr && json.data.toClipboard.html) {
         Clipboard.write(bufstr, "text/html");
       }
       break;
     case JSONRequestType.CodeRTFGeneration:
       json = jsonPayload as JSONObjectRTFSuccessRequest;
+      toClipboard = json.data.toClipboard.rtf;
+      toDisk = json.data.toDisk.rtf;
       [bufstr, filepath] = await RTFGenerator(json);
       if (bufstr && json.data.toClipboard.rtf) {
         Clipboard.write(bufstr, "text/rtf");
@@ -138,9 +146,19 @@ const main = async () => {
       return;
   }
 
+  const message =
+    toClipboard && toDisk
+      ? `Written to clipboard and saved to disk at ${filepath}`
+      : toClipboard
+        ? "Written to clipboard"
+        : toDisk
+          ? `Saved to disk at ${filepath}`
+          : "No output destination specified";
+
   writeJSONToStdout({
     success: true,
     debug: json.debug,
+    message,
     data: {
       ...json.data,
       filepath,

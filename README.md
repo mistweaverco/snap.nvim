@@ -79,9 +79,11 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.4.5',
+  version = 'v1.5.0',
+  cmd = "Snap",
   ---@type SnapUserConfig
   opts = {}
+  event = "VeryLazy",
 },
 ```
 
@@ -95,7 +97,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/snap.nvim',
-  tag = 'v1.4.5',
+  tag = 'v1.5.0',
   config = function()
 
     ---@type SnapUserConfig
@@ -114,7 +116,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/snap.nvim.git',
-  version = 'v1.4.5',
+  version = 'v1.5.0',
 })
 ---@type SnapUserConfig
 local cfg = {}
@@ -246,7 +248,7 @@ This would then translate to the following `font_settings`:
 ```lua
 return {
   "mistweaverco/snap.nvim",
-  version = 'v1.4.5',
+  version = 'v1.5.0',
   ---@type SnapUserConfig
   opts = {
     template = "linux",
@@ -323,6 +325,17 @@ Optional. Defaults to `nil`.
 Absolute path to a custom handlebars template file.
 If set, this option overrides the `template` option.
 
+### Configure `save_to_disk`
+
+Optional. Defaults to:
+
+```lua
+{
+  image = true,
+  html = true,
+}
+```
+
 ### Configure `copy_to_clipboard`
 
 Optional. Defaults to:
@@ -375,7 +388,7 @@ by running `bun install` in the plugin directory.
 ```lua
 {
   'mistweaverco/snap.nvim',
-  version = 'v1.4.5',
+  version = 'v1.5.0',
   opts = {
     timeout = 5000, -- Timeout for screenshot command in milliseconds
     log_level = "error", -- Log level for debugging (e.g., "trace", "debug", "info", "warn", "error", "off")
@@ -388,6 +401,10 @@ by running `bun install` in the plugin directory.
     },
     output_dir = "$HOME/Pictures/Screenshots", -- Directory to save screenshots
     filename_pattern = "snap.nvim_%t", -- e.g., "snap.nvim_%t" (supports %t for timestamp)
+    save_to_disk = {
+        image = true, -- Whether to save the image to disk
+        html = true, -- Whether to save the HTML to disk
+    },
     copy_to_clipboard = {
         image = true, -- Whether to copy the image to clipboard
         html = true, -- Whether to copy the HTML to clipboard
