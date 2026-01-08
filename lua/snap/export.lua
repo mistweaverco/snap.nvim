@@ -267,8 +267,7 @@ end
 ---Run backend export with given options
 ---@param opts table Export options
 ---@param export_type SnapPayloadType Export type
----@param success_message string Success message format string (with %s for filepath)
-local function run_backend_export(opts, export_type, success_message)
+local function run_backend_export(opts, export_type)
   opts = opts or {}
   local conf = Config.get()
 
@@ -327,7 +326,7 @@ local function run_backend_export(opts, export_type, success_message)
               return
             end
             if res.success then
-              Logger.notify(string.format(success_message, tostring(res.data.filepath)), Logger.LoggerLogLevels.info)
+              Logger.notify(tostring(res.message), Logger.LoggerLogLevels.info)
             else
               print("Backend error when exporting failed: " .. vim.inspect(res))
             end
@@ -385,25 +384,22 @@ end
 ---Export current buffer to RTF
 ---@param opts SnapExportOptions|nil Export options
 function M.rtf_to_clipboard(opts)
-  run_backend_export(opts, types.SnapPayloadType.rtf, "Exported RTF to: %s")
+  opts = opts or {}
+  run_backend_export(opts, types.SnapPayloadType.rtf)
 end
 
 ---Export current buffer to HTML
 ---@param opts SnapExportOptions|nil Export options
 function M.html_to_clipboard(opts)
-  run_backend_export(opts, types.SnapPayloadType.html, "Exported HTML to: %s")
+  opts = opts or {}
+  run_backend_export(opts, types.SnapPayloadType.html)
 end
 
 ---Export current buffer to image
 ---@param opts SnapExportOptions|nil Export options
 function M.image_to_clipboard(opts)
   opts = opts or {}
-  local save_path = M.get_default_save_path()
-  if not save_path then
-    Logger.error("No valid save path found for screenshots. Please set 'output_dir' in config")
-    return
-  end
-  run_backend_export({ range = opts.range }, types.SnapPayloadType.image, "Exported image to: %s")
+  run_backend_export({ range = opts.range }, types.SnapPayloadType.image)
 end
 
 return M

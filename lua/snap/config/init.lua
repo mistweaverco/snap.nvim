@@ -21,6 +21,10 @@ M.defaults = {
     image = true, -- Whether to copy the image to clipboard
     html = true, -- Whether to copy the HTML to clipboard
   },
+  save_to_disk = {
+    image = true, -- Whether to save the image to disk
+    html = true, -- Whether to save the HTML to disk
+  },
   notify = {
     enabled = true, -- Whether to show notifications
     provider = "notify", -- Notification provider: "notify", "print"

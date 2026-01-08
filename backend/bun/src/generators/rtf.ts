@@ -120,6 +120,9 @@ export const RTFGenerator = async (json: JSONObjectRTFSuccessRequest): Promise<[
 
   const filepath = outputFilepath + ".rtf";
 
-  fs.writeFileSync(filepath, doc, { encoding: "utf-8" });
+  if (json.data.toDisk.rtf) {
+    fs.writeFileSync(filepath, doc, { encoding: "utf-8" });
+  }
+
   return [doc, filepath];
 };

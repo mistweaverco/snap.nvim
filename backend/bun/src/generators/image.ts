@@ -19,7 +19,7 @@ export const ImageGenerator = async (json: JSONObjectImageSuccessRequest): Promi
   // Convert HTML to image using our custom Playwright implementation
   // Pass the executable path explicitly to ensure Playwright uses the bundled browser
   const buffer = await htmlToImage({
-    output: filepath,
+    output: json.data.toDisk.image ? filepath : undefined,
     html: code,
     transparent: json.data.transparent,
     type: json.data.outputImageFormat,

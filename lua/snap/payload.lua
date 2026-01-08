@@ -67,8 +67,7 @@ function M.get_backend_payload_from_buf(opts, callback)
   local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
   local hl_map = highlights_map.build_hl_map(bufnr)
 
-  --- @type SnapPayload
-  local tabstop = vim.api.nvim_buf_get_option(bufnr, "tabstop")
+  local tabstop = vim.bo[bufnr].tabstop or 4
 
   local snap_payload = {
     success = true,
@@ -82,13 +81,14 @@ function M.get_backend_payload_from_buf(opts, callback)
         fgColor = default_fg,
       },
       template = user_config.template or "default",
-      toClipboard = user_config.copy_to_clipboard or Config.defaults.copy_to_clipboard,
-      outputDir = user_config.output_dir or Config.defaults.output_dir,
+      toDisk = user_config.save_to_disk,
+      toClipboard = user_config.copy_to_clipboard,
+      outputDir = user_config.output_dir,
       filename = M.get_filename(bufnr),
-      filenamePattern = user_config.filename_pattern or Config.defaults.filename_pattern,
-      fontSettings = user_config.font_settings or Config.defaults.font_settings,
+      filenamePattern = user_config.filename_pattern,
+      fontSettings = user_config.font_settings,
       outputImageFormat = types.SnapImageOutputFormat.png,
-      templateFilepath = user_config.templateFilepath or Config.defaults.templateFilepath,
+      templateFilepath = user_config.templateFilepath,
       transparent = true,
       minWidth = 0,
       type = (opts and opts.type) or types.SnapPayloadType.image,

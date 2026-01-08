@@ -66,10 +66,14 @@ export interface JSONObjectHTMLSuccessRequest {
     templateFilepath?: string;
     fontSettings: FontSettings;
     additionalTemplateData?: { [key: string]: unknown };
+    toDisk: {
+      image: boolean;
+      html: boolean;
+      rtf: boolean;
+    };
     toClipboard: {
       image: boolean;
       html: boolean;
-      css: boolean;
       rtf: boolean;
     };
     outputDir?: string;
@@ -95,10 +99,14 @@ export interface JSONObjectRTFSuccessRequest {
     templateFilepath?: string;
     fontSettings: FontSettings;
     additionalTemplateData?: { [key: string]: unknown };
+    toDisk: {
+      image: boolean;
+      html: boolean;
+      rtf: boolean;
+    };
     toClipboard: {
       image: boolean;
       html: boolean;
-      css: boolean;
       rtf: boolean;
     };
     outputDir?: string;
@@ -127,10 +135,14 @@ export interface JSONObjectImageSuccessRequest {
     fontSettings: FontSettings;
     templateFilepath?: string;
     additionalTemplateData?: { [key: string]: unknown };
+    toDisk: {
+      image: boolean;
+      html: boolean;
+      rtf: boolean;
+    };
     toClipboard: {
       image: boolean;
       html: boolean;
-      css: boolean;
       rtf: boolean;
     };
     outputDir?: string;
@@ -182,6 +194,7 @@ export interface JSONObjectInstallResponse {
 
 export interface JSONObjectSuccessResponse {
   success: true;
+  message: string;
   debug: boolean;
   context?: unknown;
   data:
