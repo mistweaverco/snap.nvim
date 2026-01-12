@@ -82,9 +82,9 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
   version = 'v1.5.0',
   cmd = "Snap",
   ---@type SnapUserConfig
-  opts = {}
-  event = "VeryLazy",
-},
+  opts = {},
+  event = "VeryLazy"
+}
 ```
 
 > [!IMPORTANT]
